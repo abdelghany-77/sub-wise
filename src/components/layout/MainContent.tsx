@@ -28,7 +28,7 @@ export function MainContent({ page }: Props) {
         <div className="flex items-center gap-3 min-w-0">
           {/* Mobile Logo — shown only on small screens where sidebar is hidden */}
           <div className="lg:hidden flex items-center gap-2 flex-shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center shadow-glow">
+            <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shadow-glow">
               <Coins size={14} className="text-white" />
             </div>
           </div>

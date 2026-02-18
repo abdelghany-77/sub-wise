@@ -106,7 +106,7 @@ export function DataManager() {
       {/* Export */}
       <Card className="space-y-4">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400 flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
             <Download size={18} />
           </div>
           <div className="flex-1">

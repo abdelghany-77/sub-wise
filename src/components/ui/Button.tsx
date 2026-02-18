@@ -25,7 +25,7 @@ export function Button({
 
   const variants = {
     primary:
-      "bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white shadow-lg shadow-violet-900/30",
+      "bg-blue-500 hover:bg-blue-400 active:bg-blue-600 text-white shadow-lg shadow-blue-900/30",
     ghost:
       "bg-white/[0.05] hover:bg-white/[0.09] text-white/80 border border-white/[0.08]",
     danger:

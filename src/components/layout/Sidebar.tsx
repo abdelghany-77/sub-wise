@@ -37,14 +37,14 @@ export function Sidebar({ current, onChange }: Props) {
         {/* Logo */}
         <div className="flex items-center px-6 h-16 border-b border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center shadow-glow">
+            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center shadow-glow">
               <Coins size={22} className="text-white" />
             </div>
             <div>
               <span className="text-white font-bold text-lg leading-none">
                 SubWise
               </span>
-              <span className="block text-[10px] text-violet-400/70 font-medium tracking-wider uppercase leading-tight">
+              <span className="block text-[10px] text-blue-400/70 font-medium tracking-wider uppercase leading-tight">
                 Wealth Tracker
               </span>
             </div>
@@ -85,14 +85,14 @@ export function Sidebar({ current, onChange }: Props) {
             className={cn(
               "flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium transition-all duration-200",
               current === page
-                ? "text-violet-400"
+                ? "text-blue-400"
                 : "text-white/40 hover:text-white/70",
             )}
           >
             <span
               className={cn(
                 "p-1.5 rounded-xl transition-all duration-200",
-                current === page ? "bg-violet-600/20" : "",
+                current === page ? "bg-blue-500/20" : "",
               )}
             >
               {icon}

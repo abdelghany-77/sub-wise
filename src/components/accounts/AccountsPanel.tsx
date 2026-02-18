@@ -27,7 +27,7 @@ const ACCOUNT_TYPE_ICONS: Record<AccountType, React.ReactNode> = {
 };
 
 const PRESET_COLORS = [
-  "#7c3aed",
+  "#3b82f6",
   "#0ea5e9",
   "#10b981",
   "#f59e0b",
@@ -50,7 +50,7 @@ const DEFAULT_FORM: AccountFormData = {
   type: "bank",
   balance: "",
   currency: "EGP",
-  color: "#7c3aed",
+  color: "#3b82f6",
 };
 
 export function AccountsPanel() {
@@ -122,10 +122,10 @@ export function AccountsPanel() {
   return (
     <div className="space-y-6">
       {/* Net Worth Banner */}
-      <Card className="relative overflow-hidden bg-gradient-to-br from-violet-900/30 via-violet-800/20 to-transparent border-violet-500/20">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(124,58,237,0.15),transparent_70%)]" />
+      <Card className="relative overflow-hidden bg-gradient-to-br from-blue-900/30 via-blue-800/20 to-transparent border-blue-500/20">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.15),transparent_70%)]" />
         <div className="relative">
-          <p className="stat-label text-violet-300/60">Total Net Worth</p>
+          <p className="stat-label text-blue-300/60">Total Net Worth</p>
           <p
             className={`mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight ${netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"}`}
           >

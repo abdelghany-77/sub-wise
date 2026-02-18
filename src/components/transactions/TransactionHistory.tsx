@@ -111,7 +111,7 @@ export function TransactionHistory() {
                 className={cn(
                   "px-2 sm:px-3 py-1 rounded-md text-xs font-medium capitalize transition-all duration-200",
                   filterType === t
-                    ? "bg-violet-600 text-white"
+                    ? "bg-blue-500 text-white"
                     : "text-white/50 hover:text-white",
                 )}
               >

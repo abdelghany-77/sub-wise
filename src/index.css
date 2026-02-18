@@ -58,9 +58,9 @@
   }
 
   .btn-primary {
-    @apply bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-medium
+    @apply bg-blue-500 hover:bg-blue-400 active:bg-blue-600 text-white font-medium
            rounded-xl px-4 py-2.5 transition-all duration-200 flex items-center gap-2
-           shadow-lg shadow-violet-900/30 hover:shadow-violet-800/40;
+           shadow-lg shadow-blue-900/30 hover:shadow-blue-800/40;
   }
 
   .btn-ghost {
@@ -77,8 +77,8 @@
 
   .input-base {
     @apply w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-2.5
-           text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-violet-500/50
-           focus:border-violet-500/50 transition-all duration-200;
+           text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500/50
+           focus:border-blue-500/50 transition-all duration-200;
   }
 
   .label-base {
@@ -119,13 +119,13 @@
   }
 
   .nav-link.active {
-    @apply text-white bg-violet-600/20 border border-violet-500/20;
+    @apply text-white bg-blue-500/20 border border-blue-500/20;
   }
 }
 
 @layer utilities {
   .text-gradient-violet {
-    @apply bg-gradient-to-r from-violet-400 to-violet-200 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent;
   }
   .text-gradient-income {
     @apply bg-gradient-to-r from-emerald-400 to-emerald-200 bg-clip-text text-transparent;
@@ -137,7 +137,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.04) 50%,
+      rgba(59, 130, 246, 0.08) 50%,
       transparent 100%
     );
     background-size: 200% 100%;

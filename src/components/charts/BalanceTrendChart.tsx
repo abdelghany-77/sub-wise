@@ -120,8 +120,8 @@ export function BalanceTrendChart() {
         >
           <defs>
             <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.0} />
+              <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
             </linearGradient>
           </defs>
           <CartesianGrid
@@ -147,13 +147,13 @@ export function BalanceTrendChart() {
           <Area
             type="monotone"
             dataKey="balance"
-            stroke="#7c3aed"
+            stroke="#3B82F6"
             strokeWidth={2.5}
             fill="url(#balanceGradient)"
             dot={false}
             activeDot={{
               r: 5,
-              fill: "#7c3aed",
+              fill: "#3B82F6",
               stroke: "#fff",
               strokeWidth: 2,
             }}
