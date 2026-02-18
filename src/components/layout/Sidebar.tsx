@@ -3,7 +3,6 @@ import {
   CreditCard,
   ArrowLeftRight,
   Database,
-  X,
   Coins,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -13,8 +12,6 @@ export type Page = "dashboard" | "accounts" | "transactions" | "data";
 interface Props {
   current: Page;
   onChange: (page: Page) => void;
-  isMobileOpen: boolean;
-  onMobileToggle: () => void;
 }
 
 const NAV_ITEMS: { page: Page; label: string; icon: React.ReactNode }[] = [
@@ -32,33 +29,13 @@ const NAV_ITEMS: { page: Page; label: string; icon: React.ReactNode }[] = [
   { page: "data", label: "Data & Backup", icon: <Database size={18} /> },
 ];
 
-export function Sidebar({
-  current,
-  onChange,
-  isMobileOpen,
-  onMobileToggle,
-}: Props) {
+export function Sidebar({ current, onChange }: Props) {
   return (
     <>
-      {/* Mobile Overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={onMobileToggle}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 flex flex-col bg-[#0d0d14] border-r border-white/[0.06]",
-          "transition-transform duration-300 ease-in-out",
-          "lg:translate-x-0 lg:static lg:z-auto",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
+      {/* Desktop Sidebar — hidden on mobile */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col bg-[#0d0d14] border-r border-white/[0.06] lg:static lg:z-auto">
         {/* Logo */}
-        <div className="flex items-center justify-between px-6 h-16 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center px-6 h-16 border-b border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-glow">
               <Coins size={17} className="text-white" />
@@ -72,12 +49,6 @@ export function Sidebar({
               </span>
             </div>
           </div>
-          <button
-            onClick={onMobileToggle}
-            className="lg:hidden p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10"
-          >
-            <X size={18} />
-          </button>
         </div>
 
         {/* Nav */}
@@ -85,10 +56,7 @@ export function Sidebar({
           {NAV_ITEMS.map(({ page, label, icon }) => (
             <button
               key={page}
-              onClick={() => {
-                onChange(page);
-                onMobileToggle();
-              }}
+              onClick={() => onChange(page)}
               className={cn(
                 "nav-link w-full text-left",
                 current === page && "active",

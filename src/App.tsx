@@ -5,21 +5,11 @@ import "./index.css";
 
 export default function App() {
   const [page, setPage] = useState<Page>("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-[100dvh] bg-[#0d0d14] overflow-hidden">
-      <Sidebar
-        current={page}
-        onChange={setPage}
-        isMobileOpen={sidebarOpen}
-        onMobileToggle={() => setSidebarOpen((v) => !v)}
-      />
-      <MainContent
-        page={page}
-        onChangePage={setPage}
-        onMobileMenuToggle={() => setSidebarOpen((v) => !v)}
-      />
+      <Sidebar current={page} onChange={setPage} />
+      <MainContent page={page} onChangePage={setPage} />
     </div>
   );
 }

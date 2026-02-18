@@ -1,12 +1,5 @@
 import { useMemo } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../lib/utils";
@@ -47,7 +40,7 @@ function CustomLabel({
   outerRadius,
   percent,
 }: LabelProps) {
-  if (percent < 0.05) return null;
+  if (percent < 0.06) return null;
   const r = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + r * Math.cos(-midAngle * RADIAN);
   const y = cy + r * Math.sin(-midAngle * RADIAN);
@@ -58,7 +51,7 @@ function CustomLabel({
       fill="white"
       textAnchor="middle"
       dominantBaseline="central"
-      fontSize={11}
+      fontSize={10}
       fontWeight="600"
     >
       {`${(percent * 100).toFixed(0)}%`}
@@ -100,17 +93,17 @@ export function SpendingDonut() {
   return (
     <Card>
       <h3 className="section-title mb-1">Spending Breakdown</h3>
-      <p className="text-xs text-white/40 mb-6">
+      <p className="text-xs text-white/40 mb-4">
         Total expenses: {formatCurrency(total)}
       </p>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={180}>
         <PieChart>
           <Pie
             data={data}
             cx="50%"
             cy="50%"
-            innerRadius={60}
-            outerRadius={100}
+            innerRadius={45}
+            outerRadius={80}
             paddingAngle={3}
             dataKey="value"
             labelLine={false}
@@ -125,17 +118,25 @@ export function SpendingDonut() {
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} />
-          <Legend
-            formatter={(value) => (
-              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
-                {value}
-              </span>
-            )}
-            iconSize={10}
-            iconType="circle"
-          />
         </PieChart>
       </ResponsiveContainer>
+
+      {/* Custom Legend Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 mt-4">
+        {data.map((entry) => (
+          <div key={entry.name} className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{
+                backgroundColor: CATEGORY_COLORS[entry.name] ?? "#7c3aed",
+              }}
+            />
+            <span className="text-[11px] text-white/60 truncate">
+              {entry.name}
+            </span>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

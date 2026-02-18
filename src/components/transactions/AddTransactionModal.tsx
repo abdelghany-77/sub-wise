@@ -125,6 +125,31 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
         onClose={() => setIsOpen(false)}
         title="New Transaction"
         size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              variant={
+                form.type === "income"
+                  ? "income"
+                  : form.type === "expense"
+                    ? "expense"
+                    : "primary"
+              }
+              className="flex-1"
+            >
+              {TYPE_CONFIG[form.type].icon}
+              Add {TYPE_CONFIG[form.type].label}
+            </Button>
+          </div>
+        }
       >
         <div className="space-y-4">
           {/* Type Selector */}
@@ -231,30 +256,6 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
             value={form.note}
             onChange={(e) => setForm({ ...form, note: e.target.value })}
           />
-
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => setIsOpen(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              variant={
-                form.type === "income"
-                  ? "income"
-                  : form.type === "expense"
-                    ? "expense"
-                    : "primary"
-              }
-              className="flex-1"
-            >
-              {TYPE_CONFIG[form.type].icon}
-              Add {TYPE_CONFIG[form.type].label}
-            </Button>
-          </div>
         </div>
       </Modal>
     </>
