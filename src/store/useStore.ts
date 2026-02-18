@@ -7,6 +7,7 @@ import { ACCOUNT_TYPE_COLORS } from "../types";
 interface WealthState {
   accounts: Account[];
   transactions: Transaction[];
+  privacyMode: boolean;
   // Actions
   addAccount: (account: Omit<Account, "id" | "createdAt">) => void;
   updateAccount: (id: string, updates: Partial<Account>) => void;
@@ -18,6 +19,7 @@ interface WealthState {
     transactions: Transaction[];
   }) => void;
   clearAll: () => void;
+  togglePrivacyMode: () => void;
   // Computed helpers (not persisted — derived on access)
   getNetWorth: () => number;
   getAccountById: (id: string) => Account | undefined;
@@ -196,6 +198,9 @@ export const useStore = create<WealthState>()(
     (set, get) => ({
       accounts: DEMO_ACCOUNTS,
       transactions: DEMO_TRANSACTIONS,
+      privacyMode: false,
+
+      togglePrivacyMode: () => set((s) => ({ privacyMode: !s.privacyMode })),
 
       addAccount: (account) => {
         const newAccount: Account = {

@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 
 interface StatCardProps {
   label: string;
@@ -12,6 +13,7 @@ interface StatCardProps {
   iconColor: string;
   trend?: string;
   trendUp?: boolean;
+  privacyMode?: boolean;
 }
 
 function StatCard({
@@ -22,6 +24,7 @@ function StatCard({
   iconColor,
   trend,
   trendUp,
+  privacyMode,
 }: StatCardProps) {
   return (
     <Card className="flex items-center gap-4" hover>
@@ -33,10 +36,21 @@ function StatCard({
       </div>
       <div className="flex-1 min-w-0">
         <p className="stat-label">{label}</p>
-        <p className="stat-value mt-1 text-white">{value}</p>
+        <p
+          className={cn(
+            "stat-value mt-1 text-white transition-all duration-300",
+            privacyMode && "blur-md select-none",
+          )}
+        >
+          {value}
+        </p>
         {trend && (
           <p
-            className={`text-xs mt-1 flex items-center gap-1 ${trendUp ? "text-emerald-400" : "text-rose-400"}`}
+            className={cn(
+              "text-xs mt-1 flex items-center gap-1 transition-all duration-300",
+              trendUp ? "text-emerald-400" : "text-rose-400",
+              privacyMode && "blur-md select-none",
+            )}
           >
             {trendUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {trend}
@@ -75,6 +89,7 @@ export function DashboardStats() {
   }, [transactions]);
 
   const netWorth = getNetWorth();
+  const { privacyMode } = useStore();
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -84,6 +99,7 @@ export function DashboardStats() {
         icon={<DollarSign size={22} />}
         iconBg="rgba(124,58,237,0.2)"
         iconColor="#a78bfa"
+        privacyMode={privacyMode}
       />
       <StatCard
         label="Income This Month"
@@ -92,6 +108,7 @@ export function DashboardStats() {
         iconBg="rgba(16,185,129,0.2)"
         iconColor="#34d399"
         trendUp
+        privacyMode={privacyMode}
       />
       <StatCard
         label="Expenses This Month"
@@ -100,6 +117,7 @@ export function DashboardStats() {
         iconBg="rgba(244,63,94,0.2)"
         iconColor="#fb7185"
         trendUp={false}
+        privacyMode={privacyMode}
       />
       <StatCard
         label="Savings Rate"
@@ -113,6 +131,7 @@ export function DashboardStats() {
             : `${formatCurrency(Math.abs(stats.savings))} deficit`
         }
         trendUp={stats.savings >= 0}
+        privacyMode={privacyMode}
       />
     </div>
   );

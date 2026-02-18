@@ -28,6 +28,7 @@ const ALL_CATEGORIES = [
 export function TransactionHistory() {
   const { transactions, accounts, deleteTransaction, getAccountById } =
     useStore();
+  const { privacyMode } = useStore();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterAccount, setFilterAccount] = useState("all");
@@ -125,6 +126,7 @@ export function TransactionHistory() {
             className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
+            aria-label="Filter transactions by account"
           >
             <option value="all">All Accounts</option>
             {accounts.map((a) => (
@@ -139,6 +141,7 @@ export function TransactionHistory() {
             className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
+            aria-label="Filter transactions by category"
           >
             {ALL_CATEGORIES.map((c) => (
               <option key={c} value={c}>
@@ -209,10 +212,11 @@ export function TransactionHistory() {
                 <div className="text-right flex-shrink-0">
                   <p
                     className={cn(
-                      "text-sm font-bold font-mono",
+                      "text-sm font-bold font-mono transition-all duration-300",
                       tx.type === "income" && "text-emerald-400",
                       tx.type === "expense" && "text-rose-400",
                       tx.type === "transfer" && "text-sky-400",
+                      privacyMode && "blur-md select-none",
                     )}
                   >
                     {tx.type === "income"
@@ -226,6 +230,8 @@ export function TransactionHistory() {
 
                 {/* Delete */}
                 <button
+                  type="button"
+                  aria-label="Delete transaction"
                   onClick={() => setConfirmDelete(tx.id)}
                   className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all ml-1"
                 >

@@ -14,7 +14,7 @@ import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { Input, Select } from "../ui/FormFields";
-import { formatCurrency } from "../../lib/utils";
+import { formatCurrency, cn } from "../../lib/utils";
 import type { Account, AccountType } from "../../types";
 import { ACCOUNT_TYPE_LABELS } from "../../types";
 
@@ -54,8 +54,14 @@ const DEFAULT_FORM: AccountFormData = {
 };
 
 export function AccountsPanel() {
-  const { accounts, addAccount, updateAccount, deleteAccount, getNetWorth } =
-    useStore();
+  const {
+    accounts,
+    addAccount,
+    updateAccount,
+    deleteAccount,
+    getNetWorth,
+    privacyMode,
+  } = useStore();
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [form, setForm] = useState<AccountFormData>(DEFAULT_FORM);
@@ -127,7 +133,12 @@ export function AccountsPanel() {
         <div className="relative">
           <p className="stat-label text-blue-300/60">Total Net Worth</p>
           <p
-            className={`mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight ${netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"}`}
+            className={cn(
+              `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
+                netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"
+              }`,
+              privacyMode && "blur-md select-none",
+            )}
           >
             {formatCurrency(netWorth)}
           </p>
@@ -159,6 +170,7 @@ export function AccountsPanel() {
             <AccountCard
               key={account.id}
               account={account}
+              privacyMode={privacyMode}
               onEdit={() => openEdit(account)}
               onDelete={() => setConfirmDelete(account.id)}
             />
@@ -221,6 +233,7 @@ export function AccountsPanel() {
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
+                  type="button"
                   onClick={() => setForm({ ...form, color: c })}
                   className="w-8 h-8 rounded-full transition-all duration-200 ring-offset-2 ring-offset-[#131320]"
                   style={{
@@ -228,6 +241,7 @@ export function AccountsPanel() {
                     boxShadow: form.color === c ? `0 0 0 2px ${c}` : undefined,
                     transform: form.color === c ? "scale(1.2)" : undefined,
                   }}
+                  title={`Select color ${c}`}
                 />
               ))}
             </div>
@@ -287,10 +301,12 @@ export function AccountsPanel() {
 
 function AccountCard({
   account,
+  privacyMode,
   onEdit,
   onDelete,
 }: {
   account: Account;
+  privacyMode: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -319,14 +335,18 @@ function AccountCard({
           </div>
           <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
             <button
+              type="button"
               onClick={onEdit}
               className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all"
+              title="Edit account"
             >
               <Edit2 size={14} />
             </button>
             <button
+              type="button"
               onClick={onDelete}
               className="p-1.5 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+              title="Delete account"
             >
               <Trash2 size={14} />
             </button>
@@ -346,7 +366,10 @@ function AccountCard({
         >
           <p className="text-xs text-white/40 mb-1">Balance</p>
           <p
-            className="text-2xl font-bold font-mono"
+            className={cn(
+              "text-2xl font-bold font-mono transition-all duration-300",
+              privacyMode && "blur-md select-none",
+            )}
             style={{ color: account.color }}
           >
             {formatCurrency(account.balance, account.currency)}
