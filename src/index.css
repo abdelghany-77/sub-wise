@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+
+  body {
+    @apply bg-[#0d0d14] text-white font-sans antialiased;
+    /* Mobile PWA: prevent pull-to-refresh and ensure contained scroll */
+    user-select: none;
+    overscroll-behavior-y: contain;
+    /* Safe area padding for notched devices */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Allow text selection in inputs and textareas */
+  input,
+  textarea,
+  [contenteditable] {
+    user-select: text;
+  }
+
+  /* Instant touch response for all interactive elements */
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-white/5;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-white/20 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/30;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/[0.04] backdrop-blur-sm border border-white/[0.08] rounded-2xl;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:bg-white/[0.07] hover:border-white/[0.14];
+  }
+
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-medium
+           rounded-xl px-4 py-2.5 transition-all duration-200 flex items-center gap-2
+           shadow-lg shadow-violet-900/30 hover:shadow-violet-800/40;
+  }
+
+  .btn-ghost {
+    @apply bg-white/[0.05] hover:bg-white/[0.09] active:bg-white/[0.12] text-white/80
+           font-medium rounded-xl px-4 py-2.5 transition-all duration-200 flex items-center gap-2
+           border border-white/[0.08];
+  }
+
+  .btn-danger {
+    @apply bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 font-medium
+           rounded-xl px-4 py-2.5 transition-all duration-200 flex items-center gap-2
+           border border-rose-500/20;
+  }
+
+  .input-base {
+    @apply w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-2.5
+           text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-violet-500/50
+           focus:border-violet-500/50 transition-all duration-200;
+  }
+
+  .label-base {
+    @apply block text-sm font-medium text-white/60 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-income {
+    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .badge-expense {
+    @apply badge bg-rose-500/15 text-rose-400 border border-rose-500/20;
+  }
+
+  .badge-transfer {
+    @apply badge bg-sky-500/15 text-sky-400 border border-sky-500/20;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold font-mono tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium text-white/50 uppercase tracking-widest;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-white/90;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
+           text-white/60 hover:text-white hover:bg-white/[0.06] transition-all duration-200;
+  }
+
+  .nav-link.active {
+    @apply text-white bg-violet-600/20 border border-violet-500/20;
+  }
+}
+
+@layer utilities {
+  .text-gradient-violet {
+    @apply bg-gradient-to-r from-violet-400 to-violet-200 bg-clip-text text-transparent;
+  }
+  .text-gradient-income {
+    @apply bg-gradient-to-r from-emerald-400 to-emerald-200 bg-clip-text text-transparent;
+  }
+  .text-gradient-expense {
+    @apply bg-gradient-to-r from-rose-400 to-rose-200 bg-clip-text text-transparent;
+  }
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.04) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}
