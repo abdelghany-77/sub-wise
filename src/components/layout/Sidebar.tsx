@@ -20,13 +20,13 @@ const NAV_ITEMS: { page: Page; label: string; icon: React.ReactNode }[] = [
     label: "Dashboard",
     icon: <LayoutDashboard size={18} />,
   },
-  { page: "accounts", label: "Accounts", icon: <CreditCard size={18} /> },
+  { page: "accounts", label: "Accounts", icon: <CreditCard size={20} /> },
   {
     page: "transactions",
     label: "Transactions",
-    icon: <ArrowLeftRight size={18} />,
+    icon: <ArrowLeftRight size={20} />,
   },
-  { page: "data", label: "Data & Backup", icon: <Database size={18} /> },
+  { page: "data", label: "Data & Backup", icon: <Database size={20} /> },
 ];
 
 export function Sidebar({ current, onChange }: Props) {
@@ -37,8 +37,8 @@ export function Sidebar({ current, onChange }: Props) {
         {/* Logo */}
         <div className="flex items-center px-6 h-16 border-b border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-glow">
-              <Coins size={17} className="text-white" />
+            <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center shadow-glow">
+              <Coins size={22} className="text-white" />
             </div>
             <div>
               <span className="text-white font-bold text-lg leading-none">

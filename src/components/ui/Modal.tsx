@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -42,10 +43,10 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[100] flex sm:items-center sm:justify-center sm:p-4"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
@@ -87,11 +88,12 @@ export function Modal({
 
         {/* Footer — always visible */}
         {footer && (
-          <div className="px-5 sm:px-6 py-4 border-t border-white/[0.07] flex-shrink-0">
+          <div className="px-5 sm:px-6 py-4 border-t border-white/[0.07] flex-shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
