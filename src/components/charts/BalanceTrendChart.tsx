@@ -113,7 +113,7 @@ export function BalanceTrendChart() {
     <Card>
       <h3 className="section-title mb-1">Balance Trend</h3>
       <p className="text-xs text-white/40 mb-6">Net worth over time</p>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={200}>
         <AreaChart
           data={chartData}
           margin={{ top: 4, right: 4, bottom: 0, left: 0 }}

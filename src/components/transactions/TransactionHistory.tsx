@@ -103,13 +103,13 @@ export function TransactionHistory() {
         {/* Filter Row */}
         <div className="flex gap-2 flex-wrap">
           {/* Type Tabs */}
-          <div className="flex bg-white/[0.04] rounded-lg p-1 gap-1">
+          <div className="flex bg-white/[0.04] rounded-lg p-1 gap-0.5 sm:gap-1 flex-wrap">
             {(["all", "income", "expense", "transfer"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setFilterType(t)}
                 className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium capitalize transition-all duration-200",
+                  "px-2 sm:px-3 py-1 rounded-md text-xs font-medium capitalize transition-all duration-200",
                   filterType === t
                     ? "bg-violet-600 text-white"
                     : "text-white/50 hover:text-white",
@@ -122,7 +122,7 @@ export function TransactionHistory() {
 
           {/* Account Filter */}
           <select
-            className="input-base text-xs py-1.5 w-auto min-w-[140px] [&>option]:bg-[#131320]"
+            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
           >
@@ -136,7 +136,7 @@ export function TransactionHistory() {
 
           {/* Category Filter */}
           <select
-            className="input-base text-xs py-1.5 w-auto min-w-[140px] [&>option]:bg-[#131320]"
+            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
           >
@@ -169,7 +169,7 @@ export function TransactionHistory() {
             return (
               <div
                 key={tx.id}
-                className="glass-card-hover group flex items-center gap-4 p-4"
+                className="glass-card-hover group flex items-center gap-3 sm:gap-4 p-3 sm:p-4"
               >
                 {/* Category dot + icon */}
                 <div

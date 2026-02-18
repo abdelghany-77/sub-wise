@@ -8,14 +8,18 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-[#0d0d14] overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#0d0d14] overflow-hidden">
       <Sidebar
         current={page}
         onChange={setPage}
         isMobileOpen={sidebarOpen}
         onMobileToggle={() => setSidebarOpen((v) => !v)}
       />
-      <MainContent page={page} />
+      <MainContent
+        page={page}
+        onChangePage={setPage}
+        onMobileMenuToggle={() => setSidebarOpen((v) => !v)}
+      />
     </div>
   );
 }

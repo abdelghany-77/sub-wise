@@ -116,7 +116,8 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
   return (
     <>
       <Button icon={<Plus size={16} />} onClick={open}>
-        Add Transaction
+        <span className="hidden xs:inline">Add Transaction</span>
+        <span className="xs:hidden">Add</span>
       </Button>
 
       <Modal

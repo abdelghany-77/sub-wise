@@ -3,7 +3,6 @@ import {
   CreditCard,
   ArrowLeftRight,
   Database,
-  Menu,
   X,
   Coins,
 } from "lucide-react";
@@ -109,13 +108,31 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* Mobile Header Toggle */}
-      <button
-        onClick={onMobileToggle}
-        className="fixed top-4 left-4 z-20 lg:hidden p-2 rounded-xl bg-[#131320] border border-white/10 text-white/60 hover:text-white"
-      >
-        <Menu size={20} />
-      </button>
+      {/* Mobile Bottom Nav */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-[#0d0d14]/95 backdrop-blur-md border-t border-white/[0.06] flex items-stretch mobile-bottom-nav">
+        {NAV_ITEMS.map(({ page, label, icon }) => (
+          <button
+            key={page}
+            onClick={() => onChange(page)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium transition-all duration-200",
+              current === page
+                ? "text-violet-400"
+                : "text-white/40 hover:text-white/70",
+            )}
+          >
+            <span
+              className={cn(
+                "p-1.5 rounded-xl transition-all duration-200",
+                current === page ? "bg-violet-600/20" : "",
+              )}
+            >
+              {icon}
+            </span>
+            {label}
+          </button>
+        ))}
+      </nav>
     </>
   );
 }

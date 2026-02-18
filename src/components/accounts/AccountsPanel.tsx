@@ -127,7 +127,7 @@ export function AccountsPanel() {
         <div className="relative">
           <p className="stat-label text-violet-300/60">Total Net Worth</p>
           <p
-            className={`mt-2 text-4xl font-bold font-mono tracking-tight ${netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"}`}
+            className={`mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight ${netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"}`}
           >
             {formatCurrency(netWorth)}
           </p>
@@ -180,7 +180,7 @@ export function AccountsPanel() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             error={errors.name}
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label="Account Type"
               value={form.type}
@@ -317,7 +317,7 @@ function AccountCard({
           >
             {ACCOUNT_TYPE_ICONS[account.type]}
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={onEdit}
               className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all"

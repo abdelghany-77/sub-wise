@@ -26,9 +26,9 @@ export function Card({
         glow === "violet" && "shadow-glow",
         glow === "income" && "shadow-glow-income",
         glow === "expense" && "shadow-glow-expense",
-        padding === "sm" && "p-4",
-        padding === "md" && "p-6",
-        padding === "lg" && "p-8",
+        padding === "sm" && "p-3 sm:p-4",
+        padding === "md" && "p-4 sm:p-6",
+        padding === "lg" && "p-5 sm:p-8",
         "animate-fade-in",
         className,
       )}

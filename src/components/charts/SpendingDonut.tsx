@@ -103,7 +103,7 @@ export function SpendingDonut() {
       <p className="text-xs text-white/40 mb-6">
         Total expenses: {formatCurrency(total)}
       </p>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie
             data={data}
