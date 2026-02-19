@@ -304,7 +304,8 @@ export const useStore = create<WealthState>()(
       getNetWorthByCurrency: () => {
         const byCurrency: Record<string, number> = {};
         for (const acc of get().accounts) {
-          byCurrency[acc.currency] = (byCurrency[acc.currency] ?? 0) + acc.balance;
+          byCurrency[acc.currency] =
+            (byCurrency[acc.currency] ?? 0) + acc.balance;
         }
         return byCurrency;
       },

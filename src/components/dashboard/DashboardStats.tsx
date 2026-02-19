@@ -98,9 +98,12 @@ export function DashboardStats() {
   const { privacyMode } = useStore();
 
   // Build net worth display string
-  const netWorthDisplay = currencies.length > 0
-    ? currencies.map((cur) => formatCurrency(netWorthByCurrency[cur], cur)).join(" + ")
-    : formatCurrency(0);
+  const netWorthDisplay =
+    currencies.length > 0
+      ? currencies
+          .map((cur) => formatCurrency(netWorthByCurrency[cur], cur))
+          .join(" + ")
+      : formatCurrency(0);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -113,12 +116,17 @@ export function DashboardStats() {
         privacyMode={privacyMode}
       >
         {currencies.length > 1 && (
-          <div className={cn(
-            "flex flex-col gap-0.5 mt-1 transition-all duration-300",
-            privacyMode && "blur-md select-none",
-          )}>
+          <div
+            className={cn(
+              "flex flex-col gap-0.5 mt-1 transition-all duration-300",
+              privacyMode && "blur-md select-none",
+            )}
+          >
             {currencies.map((cur) => (
-              <span key={cur} className="stat-value text-white text-sm font-mono">
+              <span
+                key={cur}
+                className="stat-value text-white text-sm font-mono"
+              >
                 {formatCurrency(netWorthByCurrency[cur], cur)}
               </span>
             ))}

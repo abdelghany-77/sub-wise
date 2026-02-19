@@ -151,7 +151,9 @@ export function AccountsPanel() {
                     key={cur}
                     className={cn(
                       `text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
-                        val >= 0 ? "text-gradient-violet" : "text-gradient-expense"
+                        val >= 0
+                          ? "text-gradient-violet"
+                          : "text-gradient-expense"
                       }`,
                       privacyMode && "blur-md select-none",
                     )}
