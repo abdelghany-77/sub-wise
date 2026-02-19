@@ -22,6 +22,7 @@ export const EXPENSE_CATEGORIES = [
   "Personal Care",
   "Insurance",
   "Subscriptions",
+  "Sadaqah",
   "Other",
 ] as const;
 
