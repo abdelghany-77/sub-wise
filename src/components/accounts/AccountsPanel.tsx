@@ -59,7 +59,7 @@ export function AccountsPanel() {
     addAccount,
     updateAccount,
     deleteAccount,
-    getNetWorth,
+    getNetWorthByCurrency,
     privacyMode,
   } = useStore();
   const [showForm, setShowForm] = useState(false);
@@ -123,7 +123,8 @@ export function AccountsPanel() {
     setShowForm(false);
   };
 
-  const netWorth = getNetWorth();
+  const netWorthByCurrency = getNetWorthByCurrency();
+  const currencies = Object.keys(netWorthByCurrency);
 
   return (
     <div className="space-y-6">
@@ -132,18 +133,38 @@ export function AccountsPanel() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.15),transparent_70%)]" />
         <div className="relative">
           <p className="stat-label text-blue-300/60">Total Net Worth</p>
-          <p
-            className={cn(
-              `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
-                netWorth >= 0 ? "text-gradient-violet" : "text-gradient-expense"
-              }`,
-              privacyMode && "blur-md select-none",
-            )}
-          >
-            {formatCurrency(netWorth)}
-          </p>
+          {currencies.length === 0 ? (
+            <p
+              className={cn(
+                `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-violet`,
+                privacyMode && "blur-md select-none",
+              )}
+            >
+              {formatCurrency(0)}
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-2">
+              {currencies.map((cur) => {
+                const val = netWorthByCurrency[cur];
+                return (
+                  <p
+                    key={cur}
+                    className={cn(
+                      `text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
+                        val >= 0 ? "text-gradient-violet" : "text-gradient-expense"
+                      }`,
+                      privacyMode && "blur-md select-none",
+                    )}
+                  >
+                    {formatCurrency(val, cur)}
+                  </p>
+                );
+              })}
+            </div>
+          )}
           <p className="mt-2 text-sm text-white/40">
             {accounts.length} account{accounts.length !== 1 ? "s" : ""}
+            {currencies.length > 1 && ` · ${currencies.length} currencies`}
           </p>
         </div>
       </Card>

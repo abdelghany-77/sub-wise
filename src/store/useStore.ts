@@ -22,6 +22,7 @@ interface WealthState {
   togglePrivacyMode: () => void;
   // Computed helpers (not persisted — derived on access)
   getNetWorth: () => number;
+  getNetWorthByCurrency: () => Record<string, number>;
   getAccountById: (id: string) => Account | undefined;
 }
 
@@ -298,6 +299,14 @@ export const useStore = create<WealthState>()(
 
       getNetWorth: () => {
         return get().accounts.reduce((sum, acc) => sum + acc.balance, 0);
+      },
+
+      getNetWorthByCurrency: () => {
+        const byCurrency: Record<string, number> = {};
+        for (const acc of get().accounts) {
+          byCurrency[acc.currency] = (byCurrency[acc.currency] ?? 0) + acc.balance;
+        }
+        return byCurrency;
       },
 
       getAccountById: (id) => {

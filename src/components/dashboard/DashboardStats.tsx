@@ -14,6 +14,7 @@ interface StatCardProps {
   trend?: string;
   trendUp?: boolean;
   privacyMode?: boolean;
+  children?: React.ReactNode;
 }
 
 function StatCard({
@@ -25,6 +26,7 @@ function StatCard({
   trend,
   trendUp,
   privacyMode,
+  children,
 }: StatCardProps) {
   return (
     <Card className="flex items-center gap-4" hover>
@@ -36,14 +38,17 @@ function StatCard({
       </div>
       <div className="flex-1 min-w-0">
         <p className="stat-label">{label}</p>
-        <p
-          className={cn(
-            "stat-value mt-1 text-white transition-all duration-300",
-            privacyMode && "blur-md select-none",
-          )}
-        >
-          {value}
-        </p>
+        {value && (
+          <p
+            className={cn(
+              "stat-value mt-1 text-white transition-all duration-300",
+              privacyMode && "blur-md select-none",
+            )}
+          >
+            {value}
+          </p>
+        )}
+        {children}
         {trend && (
           <p
             className={cn(
@@ -62,7 +67,7 @@ function StatCard({
 }
 
 export function DashboardStats() {
-  const { transactions, getNetWorth } = useStore();
+  const { transactions, getNetWorthByCurrency } = useStore();
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -88,19 +93,38 @@ export function DashboardStats() {
     return { income, expenses, savings, savingsRate };
   }, [transactions]);
 
-  const netWorth = getNetWorth();
+  const netWorthByCurrency = getNetWorthByCurrency();
+  const currencies = Object.keys(netWorthByCurrency);
   const { privacyMode } = useStore();
+
+  // Build net worth display string
+  const netWorthDisplay = currencies.length > 0
+    ? currencies.map((cur) => formatCurrency(netWorthByCurrency[cur], cur)).join(" + ")
+    : formatCurrency(0);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       <StatCard
         label="Net Worth"
-        value={formatCurrency(netWorth)}
+        value={currencies.length <= 1 ? netWorthDisplay : ""}
         icon={<DollarSign size={22} />}
         iconBg="rgba(124,58,237,0.2)"
         iconColor="#a78bfa"
         privacyMode={privacyMode}
-      />
+      >
+        {currencies.length > 1 && (
+          <div className={cn(
+            "flex flex-col gap-0.5 mt-1 transition-all duration-300",
+            privacyMode && "blur-md select-none",
+          )}>
+            {currencies.map((cur) => (
+              <span key={cur} className="stat-value text-white text-sm font-mono">
+                {formatCurrency(netWorthByCurrency[cur], cur)}
+              </span>
+            ))}
+          </div>
+        )}
+      </StatCard>
       <StatCard
         label="Income This Month"
         value={formatCurrency(stats.income)}
