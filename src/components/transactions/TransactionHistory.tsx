@@ -182,14 +182,15 @@ export function TransactionHistory() {
                   <TypeIcon type={tx.type} />
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white truncate">
+                {/* Info + Amount wrapper */}
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  {/* Top row: note + category badge */}
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-white break-words min-w-0">
                       {tx.note || tx.category}
                     </p>
                     <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
                       style={{
                         backgroundColor: `${catColor}20`,
                         color: catColor,
@@ -198,34 +199,36 @@ export function TransactionHistory() {
                       {tx.category}
                     </span>
                   </div>
-                  <p className="text-xs text-white/40 mt-0.5">
-                    {fromAcc?.name}
-                    {toAcc && (
-                      <span className="text-sky-400/70"> → {toAcc.name}</span>
-                    )}
-                    {" · "}
-                    {formatDate(tx.date)}
-                  </p>
-                </div>
 
-                {/* Amount */}
-                <div className="text-right flex-shrink-0">
-                  <p
-                    className={cn(
-                      "text-sm font-bold font-mono transition-all duration-300",
-                      tx.type === "income" && "text-emerald-400",
-                      tx.type === "expense" && "text-rose-400",
-                      tx.type === "transfer" && "text-sky-400",
-                      privacyMode && "blur-md select-none",
-                    )}
-                  >
-                    {tx.type === "income"
-                      ? "+"
-                      : tx.type === "expense"
-                        ? "-"
-                        : ""}
-                    {formatCurrency(tx.amount, fromAcc?.currency)}
-                  </p>
+                  {/* Bottom row: account · date + amount */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-xs text-white/40 shrink-0">
+                      {fromAcc?.name}
+                      {toAcc && (
+                        <span className="text-sky-400/70"> → {toAcc.name}</span>
+                      )}
+                      {" · "}
+                      {formatDate(tx.date)}
+                    </p>
+
+                    {/* Amount visible on all screen sizes */}
+                    <p
+                      className={cn(
+                        "text-sm font-bold font-mono transition-all duration-300 shrink-0",
+                        tx.type === "income" && "text-emerald-400",
+                        tx.type === "expense" && "text-rose-400",
+                        tx.type === "transfer" && "text-sky-400",
+                        privacyMode && "blur-md select-none",
+                      )}
+                    >
+                      {tx.type === "income"
+                        ? "+"
+                        : tx.type === "expense"
+                          ? "-"
+                          : ""}
+                      {formatCurrency(tx.amount, fromAcc?.currency)}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Delete */}
@@ -233,7 +236,7 @@ export function TransactionHistory() {
                   type="button"
                   aria-label="Delete transaction"
                   onClick={() => setConfirmDelete(tx.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all ml-1"
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all ml-1 flex-shrink-0"
                 >
                   <Trash2 size={14} />
                 </button>
