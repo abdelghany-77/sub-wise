@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
   Plus,
+  Repeat,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Modal } from "../ui/Modal";
@@ -11,6 +12,7 @@ import { Button } from "../ui/Button";
 import { Input, Select, Textarea } from "../ui/FormFields";
 import {
   type TransactionType,
+  type Transaction,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
 } from "../../types";
@@ -24,6 +26,9 @@ interface FormData {
   date: string;
   accountId: string;
   toAccountId: string;
+  isRecurring: boolean;
+  recurrenceFrequency: "daily" | "weekly" | "monthly" | "yearly";
+  recurrenceEndDate: string;
 }
 
 const DEFAULT_FORM: FormData = {
@@ -34,26 +39,56 @@ const DEFAULT_FORM: FormData = {
   date: todayISO(),
   accountId: "",
   toAccountId: "",
+  isRecurring: false,
+  recurrenceFrequency: "monthly",
+  recurrenceEndDate: "",
 };
 
 interface Props {
   initialType?: TransactionType;
+  editTransaction?: Transaction | null;
+  onClose?: () => void;
 }
 
-export function AddTransactionModal({ initialType = "expense" }: Props) {
-  const { accounts, addTransaction } = useStore();
+export function AddTransactionModal({
+  initialType = "expense",
+  editTransaction,
+  onClose,
+}: Props) {
+  const { accounts, addTransaction, updateTransaction } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<FormData>({
     ...DEFAULT_FORM,
     type: initialType,
   });
-  const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+
+  const isEditMode = !!editTransaction;
 
   const categories =
     form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
+  useEffect(() => {
+    if (editTransaction) {
+      setForm({
+        type: editTransaction.type,
+        amount: String(editTransaction.amount),
+        category: editTransaction.category,
+        note: editTransaction.note,
+        date: editTransaction.date,
+        accountId: editTransaction.accountId,
+        toAccountId: editTransaction.toAccountId ?? "",
+        isRecurring: editTransaction.isRecurring ?? false,
+        recurrenceFrequency: editTransaction.recurrenceFrequency ?? "monthly",
+        recurrenceEndDate: editTransaction.recurrenceEndDate ?? "",
+      });
+      setErrors({});
+      setIsOpen(true);
+    }
+  }, [editTransaction]);
+
   const validate = () => {
-    const e: Partial<FormData> = {};
+    const e: Partial<Record<string, string>> = {};
     if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0)
       e.amount = "Enter a valid amount";
     if (!form.accountId) e.accountId = "Select an account";
@@ -63,6 +98,35 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
       e.toAccountId = "Select destination account";
     if (form.type === "transfer" && form.accountId === form.toAccountId)
       e.toAccountId = "Source and destination must differ";
+
+    if (
+      (form.type === "expense" || form.type === "transfer") &&
+      form.accountId &&
+      form.amount &&
+      !isNaN(Number(form.amount)) &&
+      Number(form.amount) > 0
+    ) {
+      const sourceAccount = accounts.find((a) => a.id === form.accountId);
+      if (sourceAccount) {
+        let available = sourceAccount.balance;
+        if (
+          isEditMode &&
+          editTransaction &&
+          editTransaction.accountId === form.accountId
+        ) {
+          if (
+            editTransaction.type === "expense" ||
+            editTransaction.type === "transfer"
+          ) {
+            available += editTransaction.amount;
+          }
+        }
+        if (Number(form.amount) > available) {
+          e.amount = `Insufficient balance (${sourceAccount.currency} ${available.toFixed(2)} available)`;
+        }
+      }
+    }
+
     return e;
   };
 
@@ -76,6 +140,11 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
     setIsOpen(true);
   };
 
+  const handleClose = () => {
+    setIsOpen(false);
+    onClose?.();
+  };
+
   const handleSubmit = () => {
     const e = validate();
     if (Object.keys(e).length > 0) {
@@ -83,7 +152,7 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
       return;
     }
 
-    addTransaction({
+    const txData = {
       type: form.type,
       amount: Number(form.amount),
       category: form.type === "transfer" ? "Transfer" : form.category,
@@ -91,8 +160,22 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
       date: form.date,
       accountId: form.accountId,
       toAccountId: form.type === "transfer" ? form.toAccountId : undefined,
-    });
-    setIsOpen(false);
+      isRecurring: form.isRecurring || undefined,
+      recurrenceFrequency: form.isRecurring
+        ? form.recurrenceFrequency
+        : undefined,
+      recurrenceEndDate:
+        form.isRecurring && form.recurrenceEndDate
+          ? form.recurrenceEndDate
+          : undefined,
+    };
+
+    if (isEditMode && editTransaction) {
+      updateTransaction(editTransaction.id, txData);
+    } else {
+      addTransaction(txData);
+    }
+    handleClose();
   };
 
   const TYPE_CONFIG = {
@@ -115,23 +198,21 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
 
   return (
     <>
-      <Button icon={<Plus size={16} />} onClick={open}>
-        <span className="hidden xs:inline">Add Transaction</span>
-        <span className="xs:hidden">Add</span>
-      </Button>
+      {!isEditMode && (
+        <Button icon={<Plus size={16} />} onClick={open}>
+          <span className="hidden xs:inline">Add Transaction</span>
+          <span className="xs:hidden">Add</span>
+        </Button>
+      )}
 
       <Modal
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        title="New Transaction"
+        onClose={handleClose}
+        title={isEditMode ? "Edit Transaction" : "New Transaction"}
         size="md"
         footer={
           <div className="flex gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => setIsOpen(false)}
-              className="flex-1"
-            >
+            <Button variant="ghost" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
@@ -146,7 +227,7 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
               className="flex-1"
             >
               {TYPE_CONFIG[form.type].icon}
-              Add {TYPE_CONFIG[form.type].label}
+              {isEditMode ? "Save" : "Add"} {TYPE_CONFIG[form.type].label}
             </Button>
           </div>
         }
@@ -248,6 +329,54 @@ export function AddTransactionModal({ initialType = "expense" }: Props) {
             value={form.date}
             onChange={(e) => setForm({ ...form, date: e.target.value })}
           />
+
+          {/* Recurring Toggle */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() =>
+                setForm({ ...form, isRecurring: !form.isRecurring })
+              }
+              className={`flex items-center gap-2.5 w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                form.isRecurring
+                  ? "bg-blue-500/20 border-blue-500/40 text-blue-400"
+                  : "bg-white/[0.04] border-white/[0.08] text-white/50 hover:text-white hover:bg-white/[0.08]"
+              }`}
+            >
+              <Repeat size={16} />
+              Recurring Transaction
+            </button>
+
+            {form.isRecurring && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
+                <Select
+                  label="Frequency"
+                  value={form.recurrenceFrequency}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      recurrenceFrequency: e.target
+                        .value as FormData["recurrenceFrequency"],
+                    })
+                  }
+                  options={[
+                    { value: "daily", label: "Daily" },
+                    { value: "weekly", label: "Weekly" },
+                    { value: "monthly", label: "Monthly" },
+                    { value: "yearly", label: "Yearly" },
+                  ]}
+                />
+                <Input
+                  label="End Date (optional)"
+                  type="date"
+                  value={form.recurrenceEndDate}
+                  onChange={(e) =>
+                    setForm({ ...form, recurrenceEndDate: e.target.value })
+                  }
+                />
+              </div>
+            )}
+          </div>
 
           {/* Note */}
           <Textarea

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -12,6 +12,53 @@ interface Props {
   size?: "sm" | "md" | "lg";
 }
 
+function useFocusTrap(
+  ref: React.RefObject<HTMLElement | null>,
+  isActive: boolean,
+) {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !ref.current) return;
+      const focusable = ref.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    },
+    [ref],
+  );
+
+  useEffect(() => {
+    if (!isActive) return;
+    document.addEventListener("keydown", handleKeyDown);
+    // Focus first focusable element
+    const timer = setTimeout(() => {
+      if (ref.current) {
+        const first = ref.current.querySelector<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        first?.focus();
+      }
+    }, 50);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [isActive, handleKeyDown, ref]);
+}
+
 export function Modal({
   isOpen,
   onClose,
@@ -21,12 +68,18 @@ export function Modal({
   size = "md",
 }: Props) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useFocusTrap(modalRef, isOpen);
 
   useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
+      previousFocusRef.current?.focus();
     }
     return () => {
       document.body.style.overflow = "";
@@ -56,6 +109,7 @@ export function Modal({
 
       {/* Modal — full screen on mobile, centered dialog on desktop */}
       <div
+        ref={modalRef}
         className={cn(
           "relative z-10 w-full bg-[#131320] border-white/10 shadow-2xl animate-slide-up flex flex-col",
           // Mobile: true full screen

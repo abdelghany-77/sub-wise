@@ -1,11 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Trash2,
+  Pencil,
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
   Search,
   Filter,
+  ArrowUpDown,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -17,6 +24,7 @@ import {
   CATEGORY_COLORS,
 } from "../../types";
 import { cn } from "../../lib/utils";
+import { AddTransactionModal } from "./AddTransactionModal";
 
 const ALL_CATEGORIES = [
   "All",
@@ -24,6 +32,9 @@ const ALL_CATEGORIES = [
   ...INCOME_CATEGORIES,
   "Transfer",
 ];
+
+type SortField = "date" | "amount" | "category";
+type SortDir = "asc" | "desc";
 
 export function TransactionHistory() {
   const { transactions, accounts, deleteTransaction, getAccountById } =
@@ -35,10 +46,17 @@ export function TransactionHistory() {
   const [filterType, setFilterType] = useState<
     "all" | "income" | "expense" | "transfer"
   >("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const filtered = useMemo(() => {
-    return transactions.filter((tx) => {
+    let result = transactions.filter((tx) => {
       if (filterType !== "all" && tx.type !== filterType) return false;
       if (filterCategory !== "All") {
         if (filterCategory === "Transfer" && tx.type !== "transfer")
@@ -48,6 +66,8 @@ export function TransactionHistory() {
       }
       if (filterAccount !== "all" && tx.accountId !== filterAccount)
         return false;
+      if (dateFrom && tx.date < dateFrom) return false;
+      if (dateTo && tx.date > dateTo) return false;
       if (search) {
         const q = search.toLowerCase();
         const acc = getAccountById(tx.accountId);
@@ -59,13 +79,50 @@ export function TransactionHistory() {
       }
       return true;
     });
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "date") cmp = a.date.localeCompare(b.date);
+      else if (sortField === "amount") cmp = a.amount - b.amount;
+      else if (sortField === "category")
+        cmp = a.category.localeCompare(b.category);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return result;
   }, [
     transactions,
     filterType,
     filterCategory,
     filterAccount,
+    dateFrom,
+    dateTo,
     search,
+    sortField,
+    sortDir,
     getAccountById,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginated = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, safeCurrentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filterType,
+    filterCategory,
+    filterAccount,
+    search,
+    dateFrom,
+    dateTo,
+    sortField,
+    sortDir,
   ]);
 
   const TypeIcon = ({ type }: { type: Transaction["type"] }) => {
@@ -150,6 +207,51 @@ export function TransactionHistory() {
             ))}
           </select>
         </div>
+
+        {/* Date Range + Sort Row */}
+        <div className="flex gap-2 flex-wrap items-end">
+          <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+            <Calendar size={14} className="text-white/30 flex-shrink-0" />
+            <input
+              type="date"
+              className="input-base text-xs py-1.5 flex-1"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="Filter from date"
+              placeholder="From"
+            />
+            <span className="text-white/30 text-xs">–</span>
+            <input
+              type="date"
+              className="input-base text-xs py-1.5 flex-1"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label="Filter to date"
+              placeholder="To"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown size={14} className="text-white/30 flex-shrink-0" />
+            <select
+              className="input-base text-xs py-1.5 min-w-[100px] [&>option]:bg-[#131320]"
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as SortField)}
+              aria-label="Sort transactions by"
+            >
+              <option value="date">Date</option>
+              <option value="amount">Amount</option>
+              <option value="category">Category</option>
+            </select>
+            <button
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all text-xs font-medium min-w-[44px] text-center"
+              aria-label={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
+            >
+              {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+            </button>
+          </div>
+        </div>
       </Card>
 
       {/* Table */}
@@ -162,7 +264,7 @@ export function TransactionHistory() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map((tx) => {
+          {paginated.map((tx) => {
             const fromAcc = getAccountById(tx.accountId);
             const toAcc = tx.toAccountId
               ? getAccountById(tx.toAccountId)
@@ -231,18 +333,76 @@ export function TransactionHistory() {
                   </div>
                 </div>
 
-                {/* Delete */}
-                <button
-                  type="button"
-                  aria-label="Delete transaction"
-                  onClick={() => setConfirmDelete(tx.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all ml-1 flex-shrink-0"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {/* Edit + Delete */}
+                <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
+                  <button
+                    type="button"
+                    aria-label="Edit transaction"
+                    onClick={() => setEditingTx(tx)}
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete transaction"
+                    onClick={() => setConfirmDelete(tx.id)}
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <p className="text-xs text-white/40">
+            Showing {(safeCurrentPage - 1) * pageSize + 1}–
+            {Math.min(safeCurrentPage * pageSize, filtered.length)} of{" "}
+            {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
+              aria-label="First page"
+            >
+              <ChevronsLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs text-white/60 px-2 font-medium">
+              {safeCurrentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
+              aria-label="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
+              aria-label="Last page"
+            >
+              <ChevronsRight size={16} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -281,6 +441,14 @@ export function TransactionHistory() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {editingTx && (
+        <AddTransactionModal
+          editTransaction={editingTx}
+          onClose={() => setEditingTx(null)}
+        />
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../lib/utils";
 import { CATEGORY_COLORS } from "../../types";
+import { cn } from "../../lib/utils";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -60,12 +61,19 @@ function CustomLabel({
 }
 
 export function SpendingDonut() {
-  const { transactions } = useStore();
+  const { transactions, privacyMode } = useStore();
 
   const data = useMemo(() => {
+    const now = new Date();
     const byCategory = new Map<string, number>();
     for (const tx of transactions) {
       if (tx.type !== "expense") continue;
+      const d = new Date(tx.date);
+      if (
+        d.getMonth() !== now.getMonth() ||
+        d.getFullYear() !== now.getFullYear()
+      )
+        continue;
       byCategory.set(
         tx.category,
         (byCategory.get(tx.category) ?? 0) + tx.amount,
@@ -93,33 +101,45 @@ export function SpendingDonut() {
   return (
     <Card>
       <h3 className="section-title mb-1">Spending Breakdown</h3>
-      <p className="text-xs text-white/40 mb-4">
-        Total expenses: {formatCurrency(total)}
+      <p
+        className={cn(
+          "text-xs text-white/40 mb-4",
+          privacyMode && "blur-md select-none",
+        )}
+      >
+        This month: {formatCurrency(total)}
       </p>
-      <ResponsiveContainer width="100%" height={180}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={45}
-            outerRadius={80}
-            paddingAngle={3}
-            dataKey="value"
-            labelLine={false}
-            label={CustomLabel}
-          >
-            {data.map((entry) => (
-              <Cell
-                key={entry.name}
-                fill={CATEGORY_COLORS[entry.name] ?? "#7c3aed"}
-                stroke="transparent"
-              />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
+      <div
+        className={cn(
+          "transition-all duration-300",
+          privacyMode && "blur-lg select-none pointer-events-none",
+        )}
+      >
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={45}
+              outerRadius={80}
+              paddingAngle={3}
+              dataKey="value"
+              labelLine={false}
+              label={CustomLabel}
+            >
+              {data.map((entry) => (
+                <Cell
+                  key={entry.name}
+                  fill={CATEGORY_COLORS[entry.name] ?? "#7c3aed"}
+                  stroke="transparent"
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* Custom Legend Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 mt-4">

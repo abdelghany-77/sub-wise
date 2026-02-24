@@ -5,6 +5,8 @@ import { BalanceTrendChart } from "../charts/BalanceTrendChart";
 import { TransactionHistory } from "../transactions/TransactionHistory";
 import { AddTransactionModal } from "../transactions/AddTransactionModal";
 import { AccountsPanel } from "../accounts/AccountsPanel";
+import { BudgetsPanel } from "../budgets/BudgetsPanel";
+import { SavingsGoalsPanel } from "../goals/SavingsGoalsPanel";
 import { DataManager } from "../data/DataManager";
 import type { Page } from "./Sidebar";
 import { useStore } from "../../store/useStore";
@@ -18,6 +20,8 @@ const PAGE_TITLES: Record<Page, string> = {
   dashboard: "Dashboard",
   accounts: "Accounts",
   transactions: "Transactions",
+  budgets: "Budgets",
+  goals: "Savings Goals",
   data: "Data & Backup",
 };
 
@@ -74,6 +78,10 @@ export function MainContent({ page }: Props) {
         {page === "accounts" && <AccountsPanel />}
 
         {page === "transactions" && <TransactionHistory />}
+
+        {page === "budgets" && <BudgetsPanel />}
+
+        {page === "goals" && <SavingsGoalsPanel />}
 
         {page === "data" && <DataManager />}
       </div>

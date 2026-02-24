@@ -11,6 +11,7 @@ import {
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -31,7 +32,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function BalanceTrendChart() {
-  const { transactions, accounts } = useStore();
+  const { transactions, accounts, privacyMode } = useStore();
 
   const chartData = useMemo(() => {
     if (transactions.length === 0) return [];
@@ -113,53 +114,60 @@ export function BalanceTrendChart() {
     <Card>
       <h3 className="section-title mb-1">Balance Trend</h3>
       <p className="text-xs text-white/40 mb-6">Net worth over time</p>
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart
-          data={chartData}
-          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-        >
-          <defs>
-            <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="rgba(255,255,255,0.05)"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-            width={40}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area
-            type="monotone"
-            dataKey="balance"
-            stroke="#3B82F6"
-            strokeWidth={2.5}
-            fill="url(#balanceGradient)"
-            dot={false}
-            activeDot={{
-              r: 5,
-              fill: "#3B82F6",
-              stroke: "#fff",
-              strokeWidth: 2,
-            }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      <div
+        className={cn(
+          "transition-all duration-300",
+          privacyMode && "blur-lg select-none pointer-events-none",
+        )}
+      >
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart
+            data={chartData}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+          >
+            <defs>
+              <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.05)"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+              width={40}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="balance"
+              stroke="#3B82F6"
+              strokeWidth={2.5}
+              fill="url(#balanceGradient)"
+              dot={false}
+              activeDot={{
+                r: 5,
+                fill: "#3B82F6",
+                stroke: "#fff",
+                strokeWidth: 2,
+              }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </Card>
   );
 }

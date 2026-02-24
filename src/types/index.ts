@@ -69,6 +69,8 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Rental Income": "#84cc16",
   Gift: "#fb7185",
   Refund: "#34d399",
+  Sadaqah: "#059669",
+  Transfer: "#0ea5e9",
 };
 
 export interface Account {
@@ -90,5 +92,30 @@ export interface Transaction {
   date: string;
   accountId: string;
   toAccountId?: string; // for transfers
+  createdAt: string;
+  // Recurring transaction fields
+  isRecurring?: boolean;
+  recurrenceFrequency?: "daily" | "weekly" | "monthly" | "yearly";
+  recurrenceEndDate?: string;
+  parentRecurringId?: string; // links generated transactions to the template
+}
+
+export interface Budget {
+  id: string;
+  category: string;
+  limit: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  currency: string;
+  deadline?: string;
+  accountId?: string; // linked savings account
+  color: string;
   createdAt: string;
 }

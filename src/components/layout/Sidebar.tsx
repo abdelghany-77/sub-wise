@@ -4,10 +4,18 @@ import {
   ArrowLeftRight,
   Database,
   Coins,
+  PieChart,
+  Target,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export type Page = "dashboard" | "accounts" | "transactions" | "data";
+export type Page =
+  | "dashboard"
+  | "accounts"
+  | "transactions"
+  | "budgets"
+  | "goals"
+  | "data";
 
 interface Props {
   current: Page;
@@ -26,6 +34,8 @@ const NAV_ITEMS: { page: Page; label: string; icon: React.ReactNode }[] = [
     label: "Transactions",
     icon: <ArrowLeftRight size={20} />,
   },
+  { page: "budgets", label: "Budgets", icon: <PieChart size={20} /> },
+  { page: "goals", label: "Goals", icon: <Target size={20} /> },
   { page: "data", label: "Data & Backup", icon: <Database size={20} /> },
 ];
 
@@ -71,7 +81,7 @@ export function Sidebar({ current, onChange }: Props) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-white/[0.06]">
           <p className="text-[11px] text-white/25 text-center">
-            All data stored locally · v0.1.0
+            All data stored locally · v0.1.1
           </p>
         </div>
       </aside>

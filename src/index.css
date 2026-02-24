@@ -10,20 +10,10 @@
   body {
     @apply bg-[#0d0d14] text-white font-sans antialiased;
     /* Mobile PWA: prevent pull-to-refresh and ensure contained scroll */
-    -webkit-user-select: none;
-    user-select: none;
     overscroll-behavior-y: contain;
     /* Safe area padding for notched devices */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  /* Allow text selection in inputs and textareas */
-  input,
-  textarea,
-  [contenteditable] {
-    -webkit-user-select: text;
-    user-select: text;
   }
 
   /* Instant touch response for all interactive elements */

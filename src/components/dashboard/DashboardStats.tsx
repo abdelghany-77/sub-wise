@@ -67,9 +67,9 @@ function StatCard({
 }
 
 export function DashboardStats() {
-  const { transactions, getNetWorthByCurrency } = useStore();
+  const { transactions, accounts, getNetWorthByCurrency } = useStore();
 
-  const stats = useMemo(() => {
+  const statsByCurrency = useMemo(() => {
     const now = new Date();
     const thisMonth = transactions.filter((tx) => {
       const d = new Date(tx.date);
@@ -78,24 +78,62 @@ export function DashboardStats() {
       );
     });
 
-    const income = thisMonth
-      .filter((tx) => tx.type === "income")
-      .reduce((s, tx) => s + tx.amount, 0);
+    // Group by currency using account lookup
+    const byCurrency: Record<string, { income: number; expenses: number }> = {};
+    for (const tx of thisMonth) {
+      const acc = accounts.find((a) => a.id === tx.accountId);
+      const cur = acc?.currency ?? "EGP";
+      if (!byCurrency[cur]) byCurrency[cur] = { income: 0, expenses: 0 };
+      if (tx.type === "income") byCurrency[cur].income += tx.amount;
+      if (tx.type === "expense") byCurrency[cur].expenses += tx.amount;
+    }
 
-    const expenses = thisMonth
-      .filter((tx) => tx.type === "expense")
-      .reduce((s, tx) => s + tx.amount, 0);
+    // If no transactions, use first account currency or EGP
+    const currencies = Object.keys(byCurrency);
+    if (currencies.length === 0) {
+      const defaultCur = accounts[0]?.currency ?? "EGP";
+      byCurrency[defaultCur] = { income: 0, expenses: 0 };
+    }
 
-    const savings = income - expenses;
-    const savingsRate =
-      income > 0 ? ((savings / income) * 100).toFixed(0) : "0";
-
-    return { income, expenses, savings, savingsRate };
-  }, [transactions]);
+    return byCurrency;
+  }, [transactions, accounts]);
 
   const netWorthByCurrency = getNetWorthByCurrency();
   const currencies = Object.keys(netWorthByCurrency);
   const { privacyMode } = useStore();
+
+  // Build display values considering multiple currencies
+  const statCurrencies = Object.keys(statsByCurrency);
+  const totalIncome =
+    statCurrencies.length === 1
+      ? formatCurrency(
+          statsByCurrency[statCurrencies[0]].income,
+          statCurrencies[0],
+        )
+      : statCurrencies
+          .map((c) => formatCurrency(statsByCurrency[c].income, c))
+          .join(" + ");
+  const totalExpenses =
+    statCurrencies.length === 1
+      ? formatCurrency(
+          statsByCurrency[statCurrencies[0]].expenses,
+          statCurrencies[0],
+        )
+      : statCurrencies
+          .map((c) => formatCurrency(statsByCurrency[c].expenses, c))
+          .join(" + ");
+
+  // Savings rate (use first currency or aggregate)
+  const primaryCur = statCurrencies[0] ?? "EGP";
+  const primaryStats = statsByCurrency[primaryCur] ?? {
+    income: 0,
+    expenses: 0,
+  };
+  const savings = primaryStats.income - primaryStats.expenses;
+  const savingsRate =
+    primaryStats.income > 0
+      ? ((savings / primaryStats.income) * 100).toFixed(0)
+      : "0";
 
   // Build net worth display string
   const netWorthDisplay =
@@ -135,7 +173,7 @@ export function DashboardStats() {
       </StatCard>
       <StatCard
         label="Income This Month"
-        value={formatCurrency(stats.income)}
+        value={totalIncome}
         icon={<TrendingUp size={22} />}
         iconBg="rgba(16,185,129,0.2)"
         iconColor="#34d399"
@@ -144,7 +182,7 @@ export function DashboardStats() {
       />
       <StatCard
         label="Expenses This Month"
-        value={formatCurrency(stats.expenses)}
+        value={totalExpenses}
         icon={<TrendingDown size={22} />}
         iconBg="rgba(244,63,94,0.2)"
         iconColor="#fb7185"
@@ -153,16 +191,16 @@ export function DashboardStats() {
       />
       <StatCard
         label="Savings Rate"
-        value={`${stats.savingsRate}%`}
+        value={`${savingsRate}%`}
         icon={<Activity size={22} />}
         iconBg="rgba(14,165,233,0.2)"
         iconColor="#38bdf8"
         trend={
-          stats.savings >= 0
-            ? `+${formatCurrency(stats.savings)} saved`
-            : `${formatCurrency(Math.abs(stats.savings))} deficit`
+          savings >= 0
+            ? `+${formatCurrency(savings, primaryCur)} saved`
+            : `${formatCurrency(Math.abs(savings), primaryCur)} deficit`
         }
-        trendUp={stats.savings >= 0}
+        trendUp={savings >= 0}
         privacyMode={privacyMode}
       />
     </div>

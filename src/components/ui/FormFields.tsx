@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 import { cn } from "../../lib/utils";
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -12,12 +12,20 @@ export function Select({
   error,
   options,
   className,
+  id: propId,
   ...props
 }: SelectProps) {
+  const autoId = useId();
+  const inputId = propId || autoId;
   return (
     <div className="w-full">
-      {label && <label className="label-base">{label}</label>}
+      {label && (
+        <label htmlFor={inputId} className="label-base">
+          {label}
+        </label>
+      )}
       <select
+        id={inputId}
         className={cn(
           "input-base appearance-none",
           "[&>option]:bg-[#131320] [&>option]:text-white",
@@ -43,10 +51,23 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
 }
 
-export function Input({ label, error, icon, className, ...props }: InputProps) {
+export function Input({
+  label,
+  error,
+  icon,
+  className,
+  id: propId,
+  ...props
+}: InputProps) {
+  const autoId = useId();
+  const inputId = propId || autoId;
   return (
     <div className="w-full">
-      {label && <label className="label-base">{label}</label>}
+      {label && (
+        <label htmlFor={inputId} className="label-base">
+          {label}
+        </label>
+      )}
       <div className="relative">
         {icon && (
           <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30">
@@ -54,6 +75,7 @@ export function Input({ label, error, icon, className, ...props }: InputProps) {
           </div>
         )}
         <input
+          id={inputId}
           className={cn(
             "input-base",
             icon && "pl-10",
@@ -73,11 +95,24 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   error?: string;
 }
 
-export function Textarea({ label, error, className, ...props }: TextareaProps) {
+export function Textarea({
+  label,
+  error,
+  className,
+  id: propId,
+  ...props
+}: TextareaProps) {
+  const autoId = useId();
+  const inputId = propId || autoId;
   return (
     <div className="w-full">
-      {label && <label className="label-base">{label}</label>}
+      {label && (
+        <label htmlFor={inputId} className="label-base">
+          {label}
+        </label>
+      )}
       <textarea
+        id={inputId}
         rows={3}
         className={cn(
           "input-base resize-none",
