@@ -288,7 +288,7 @@ export function TransactionHistory() {
                 <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                   {/* Top row: note + category badge */}
                   <div className="flex items-start gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-white break-words min-w-0">
+                    <p className="text-sm font-medium text-white break-words">
                       {tx.note || tx.category}
                     </p>
                     <span
@@ -303,8 +303,8 @@ export function TransactionHistory() {
                   </div>
 
                   {/* Bottom row: account · date + amount */}
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-white/40 min-w-0 truncate">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs text-white/40 min-w-0 break-words">
                       {fromAcc?.name}
                       {toAcc && (
                         <span className="text-sky-400/70"> → {toAcc.name}</span>
