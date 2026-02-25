@@ -303,8 +303,8 @@ export function TransactionHistory() {
                   </div>
 
                   {/* Bottom row: account · date + amount */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-xs text-white/40 shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-white/40 min-w-0 truncate">
                       {fromAcc?.name}
                       {toAcc && (
                         <span className="text-sky-400/70"> → {toAcc.name}</span>
