@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import {
   Trash2,
   Pencil,
@@ -407,41 +408,13 @@ export function TransactionHistory() {
       )}
 
       {/* Delete Confirm */}
-      {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div
-            className="bg-[#131320] border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Delete Transaction?
-            </h3>
-            <p className="text-white/50 text-sm mb-6">
-              This will reverse the balance effect on the associated account(s).
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="btn-ghost flex-1 justify-center"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  deleteTransaction(confirmDelete);
-                  setConfirmDelete(null);
-                }}
-                className="btn-danger flex-1 justify-center"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => { if (confirmDelete) deleteTransaction(confirmDelete); }}
+        title="Delete Transaction?"
+        message="This will reverse the balance effect on the associated account(s)."
+      />
 
       {/* Edit Transaction Modal */}
       {editingTx && (

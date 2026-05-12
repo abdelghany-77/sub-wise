@@ -98,7 +98,7 @@ export function DashboardStats() {
     return byCurrency;
   }, [transactions, accounts]);
 
-  const netWorthByCurrency = getNetWorthByCurrency();
+  const netWorthByCurrency = useMemo(() => getNetWorthByCurrency(), [accounts]);
   const currencies = Object.keys(netWorthByCurrency);
   const { privacyMode } = useStore();
 

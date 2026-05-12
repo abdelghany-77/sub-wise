@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import {
   Plus,
   Pencil,
@@ -236,7 +237,7 @@ export function BudgetsPanel() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${b.category} budget progress`}>
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-500",
@@ -308,41 +309,13 @@ export function BudgetsPanel() {
       </Modal>
 
       {/* Delete Confirm */}
-      {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div
-            className="bg-[#131320] border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Delete Budget?
-            </h3>
-            <p className="text-white/50 text-sm mb-6">
-              This will remove the spending limit for this category.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="btn-ghost flex-1 justify-center"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  deleteBudget(confirmDelete);
-                  setConfirmDelete(null);
-                }}
-                className="btn-danger flex-1 justify-center"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => { if (confirmDelete) deleteBudget(confirmDelete); }}
+        title="Delete Budget?"
+        message="This will remove the spending limit for this category."
+      />
     </div>
   );
 }

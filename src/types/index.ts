@@ -73,6 +73,19 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Transfer: "#0ea5e9",
 };
 
+export const PRESET_COLORS = [
+  "#3b82f6",
+  "#0ea5e9",
+  "#10b981",
+  "#f59e0b",
+  "#ec4899",
+  "#ef4444",
+  "#8b5cf6",
+  "#14b8a6",
+  "#6366f1",
+  "#f43f5e",
+];
+
 export interface Account {
   id: string;
   name: string;

@@ -9,10 +9,10 @@ import {
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
-import type { Account, Transaction } from "../../types";
+import type { Account, Transaction, Budget, SavingsGoal } from "../../types";
 
 export function DataManager() {
-  const { accounts, transactions, importData, clearAll } = useStore();
+  const { accounts, transactions, budgets, savingsGoals, importData, clearAll } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<
     "idle" | "success" | "error"
@@ -26,6 +26,8 @@ export function DataManager() {
       version: "1.0",
       accounts,
       transactions,
+      budgets,
+      savingsGoals,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -48,6 +50,8 @@ export function DataManager() {
         const data = JSON.parse(raw) as {
           accounts: Account[];
           transactions: Transaction[];
+          budgets?: Budget[];
+          savingsGoals?: SavingsGoal[];
         };
         if (
           !Array.isArray(data.accounts) ||
@@ -58,10 +62,12 @@ export function DataManager() {
         importData({
           accounts: data.accounts,
           transactions: data.transactions,
+          budgets: data.budgets,
+          savingsGoals: data.savingsGoals,
         });
         setImportStatus("success");
         setImportMsg(
-          `Successfully imported ${data.accounts.length} accounts and ${data.transactions.length} transactions.`,
+          `Successfully imported ${data.accounts.length} accounts, ${data.transactions.length} transactions, ${data.budgets?.length ?? 0} budgets, and ${data.savingsGoals?.length ?? 0} goals.`,
         );
       } catch {
         setImportStatus("error");
@@ -148,6 +154,7 @@ export function DataManager() {
           accept=".json"
           onChange={handleImport}
           className="hidden"
+          aria-label="Import backup file"
         />
         <Button
           variant="ghost"

@@ -11,21 +11,13 @@ import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Input, Select } from "../ui/FormFields";
 import { formatCurrency, cn } from "../../lib/utils";
+import { PRESET_COLORS } from "../../types";
 import type { SavingsGoal } from "../../types";
 
 const CURRENCIES = ["EGP", "USD", "EUR", "GBP", "SAR", "AED"];
-const GOAL_COLORS = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#06b6d4",
-  "#f43f5e",
-  "#6366f1",
-];
 
 export function SavingsGoalsPanel() {
   const {
@@ -49,7 +41,7 @@ export function SavingsGoalsPanel() {
     currency: "EGP",
     deadline: "",
     accountId: "",
-    color: GOAL_COLORS[0],
+    color: PRESET_COLORS[0],
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
@@ -61,7 +53,7 @@ export function SavingsGoalsPanel() {
       currency: "EGP",
       deadline: "",
       accountId: "",
-      color: GOAL_COLORS[Math.floor(Math.random() * GOAL_COLORS.length)],
+      color: PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)],
     });
     setErrors({});
     setIsOpen(true);
@@ -281,7 +273,7 @@ export function SavingsGoalsPanel() {
                       of {formatCurrency(g.targetAmount, g.currency)}
                     </span>
                   </div>
-                  <div className="h-2.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div className="h-2.5 rounded-full bg-white/[0.06] overflow-hidden" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.name} savings progress`}>
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{
@@ -393,7 +385,7 @@ export function SavingsGoalsPanel() {
           <div>
             <label className="label-base">Color</label>
             <div className="flex gap-2 flex-wrap">
-              {GOAL_COLORS.map((c) => (
+              {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
@@ -453,41 +445,13 @@ export function SavingsGoalsPanel() {
       </Modal>
 
       {/* Delete Confirm */}
-      {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setConfirmDelete(null)}
-        >
-          <div
-            className="bg-[#131320] border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Delete Savings Goal?
-            </h3>
-            <p className="text-white/50 text-sm mb-6">
-              This will permanently remove this goal and its progress.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="btn-ghost flex-1 justify-center"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  deleteSavingsGoal(confirmDelete);
-                  setConfirmDelete(null);
-                }}
-                className="btn-danger flex-1 justify-center"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => { if (confirmDelete) deleteSavingsGoal(confirmDelete); }}
+        title="Delete Savings Goal?"
+        message="This will permanently remove this goal and its progress."
+      />
     </div>
   );
 }

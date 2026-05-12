@@ -16,7 +16,7 @@ import { Modal } from "../ui/Modal";
 import { Input, Select } from "../ui/FormFields";
 import { formatCurrency, cn } from "../../lib/utils";
 import type { Account, AccountType } from "../../types";
-import { ACCOUNT_TYPE_LABELS } from "../../types";
+import { ACCOUNT_TYPE_LABELS, PRESET_COLORS } from "../../types";
 
 const ACCOUNT_TYPE_ICONS: Record<AccountType, React.ReactNode> = {
   bank: <Building2 size={18} />,
@@ -26,16 +26,7 @@ const ACCOUNT_TYPE_ICONS: Record<AccountType, React.ReactNode> = {
   investment: <TrendingUp size={18} />,
 };
 
-const PRESET_COLORS = [
-  "#3b82f6",
-  "#0ea5e9",
-  "#10b981",
-  "#f59e0b",
-  "#ec4899",
-  "#ef4444",
-  "#3b82f6",
-  "#14b8a6",
-];
+
 
 interface AccountFormData {
   name: string;

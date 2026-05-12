@@ -48,15 +48,17 @@ interface Props {
   initialType?: TransactionType;
   editTransaction?: Transaction | null;
   onClose?: () => void;
+  autoOpen?: boolean;
 }
 
 export function AddTransactionModal({
   initialType = "expense",
   editTransaction,
   onClose,
+  autoOpen = false,
 }: Props) {
   const { accounts, addTransaction, updateTransaction } = useStore();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(autoOpen);
   const [form, setForm] = useState<FormData>({
     ...DEFAULT_FORM,
     type: initialType,
