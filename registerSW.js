@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/sub-wise/sw.js', { scope: '/sub-wise/' })})}
