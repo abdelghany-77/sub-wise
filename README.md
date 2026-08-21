@@ -1,134 +1,142 @@
-# 💎 Walleteer — Wealth & Expense Tracker
+# Walleteer — Wealth and Expense Tracker
 
-A modern, high-end, privacy-first personal wealth and expense tracker built as an offline-capable Progressive Web App (PWA). Track multi-currency accounts, transactions, category budgets, and savings goals — all securely stored locally on your device.
+Walleteer is a privacy-first personal finance and wealth management web application built as an installable Progressive Web App (PWA). It helps you track multi-currency bank accounts, cash wallets, credit cards, investments, category budgets, and savings goals with zero server dependencies—all data stays completely on your local device.
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](package.json)
-[![PWA](https://img.shields.io/badge/PWA-Supported-emerald.svg)](vite.config.ts)
-[![License](https://img.shields.io/badge/License-MIT-blueviolet.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-
-🌐 **Live Demo**: [https://abdelghany-77.github.io/sub-wise/](https://abdelghany-77.github.io/sub-wise/)
+Live Demo: https://abdelghany-77.github.io/sub-wise/
 
 ---
 
-## ✨ Features & Capabilities
+## Overview
 
-### 📊 1. Minimalist & High-Utility Dashboard
-- **Interactive Summary Cards**: Live Net Worth, Inflow, Outflow, and Savings Rate cards with embedded inline SVG sparklines and dynamic Month-over-Month (MoM) delta badges (e.g. `+12.4% vs last month`).
-- **Visual Analytics**: Interactive Spending Donut, Balance Trend, and Income vs. Expense charts with responsive tooltips.
-- **Recent Activity**: Streamlined top-5 recent transactions list with an instant `View All →` shortcut to the full transaction powerhouse.
-
-### 💳 2. Multi-Account Management
-- Track Bank Accounts, Digital Wallets, Credit Cards, Savings, and Investment portfolios.
-- Multi-currency support: **EGP, USD, EUR, GBP, SAR, AED**.
-- Real-time aggregated Net Worth calculations across multiple currency assets.
-
-### ⚡ 3. Full Powerhouse Transactions Page
-- **Comprehensive Multi-Filter System**: Instant filtering by transaction type (All, Income, Expense, Transfer), linked Account, Category, and Date Range (`From` / `To`).
-- **Instant Search**: Real-time note, category, account, and amount search.
-- **Hover Row Actions**: Quick **Duplicate**, **Edit**, and **Delete** actions on each transaction row.
-- **Strict Pagination Controls**: Page-size selector (`10`, `25`, `50` per page), detailed count indicator, and clickable pill navigation.
-
-### 🎯 4. Smart Budgets & Net Worth Auto-Deduction
-- Monthly spending limits per category with visual color-coded progress bars and budget alerts (80% warning, 100% exceeded).
-- **Committed Monthly Spend**: Opt-in toggle on budgets to automatically subtract committed monthly allocations from your calculated Net Worth.
-
-### 🏆 5. Savings Goals & Financial Reports
-- Set target amounts, deadlines, and link dedicated savings accounts.
-- Direct quick-contribute modal to fund goals incrementally.
-- In-depth monthly financial reports with category breakdown comparisons and savings rate tracking.
-
-### ⌨️ 6. Global Command Palette (`Cmd+K` / `Ctrl+K`)
-- Open the Command Palette from anywhere with keyboard shortcuts (`Cmd+K` or `Ctrl+K`) or via the search bar in the navigation header.
-- Rapidly search transactions, jump between pages, toggle privacy mode, or execute quick actions.
-
-### 🔒 7. Enhanced Privacy Mode & Data Safety
-- **1-Click Privacy Blur**: Applies smooth `filter: blur(8px)` with `user-select: none` across all sensitive balances and amounts.
-- **100% Local & Offline**: All records persist in your browser via `localStorage` with automatic key migrations. No telemetry or server storage.
-- **JSON Backup & Restore**: Export and import full encrypted snapshots of your data anytime.
+Managing personal finances often involves compromising privacy or dealing with bloated interfaces. Walleteer was built to offer a fast, distraction-free, and privacy-respecting alternative. It functions entirely client-side, storing records in your browser's local storage while providing rich data visualization and responsive layout controls across desktop, tablet, and mobile devices.
 
 ---
 
-## 🛠️ Tech Stack
+## Core Capabilities
 
-| Technology | Purpose |
-|---|---|
-| **React 19** | Modern UI Component Architecture |
-| **TypeScript 5.9** | Strict Type Safety & Developer Experience |
-| **Vite 7** | Lightning-fast Build Tooling & HMR Dev Server |
-| **Tailwind CSS 3** | Bespoke Fintech Design System & Glassmorphism |
-| **Zustand** | Performant Global State Management & Persistence |
-| **Recharts** | Smooth Responsive Data Visualizations |
-| **Lucide React** | Consistent Modern Iconography |
-| **vite-plugin-pwa** | Service Worker, Manifest & Offline Caching |
+### Dashboard & Analytics
+- Overview cards for Net Worth, Inflow, Outflow, and Savings Rate with inline trend sparklines and month-over-month percentage changes.
+- Interactive visualizations powered by Recharts, including category spending distribution donuts, balance trend lines, and income versus expense comparisons.
+- Clean recent activity feed displaying the latest five transactions with direct navigation to the full transactions ledger.
+
+### Accounts & Multi-Currency Support
+- Support for multiple asset types: Bank Accounts, Digital Wallets, Credit Cards, Savings Accounts, and Investment portfolios.
+- Multi-currency tracking with support for EGP, USD, EUR, GBP, SAR, and AED.
+- Aggregated net worth calculations factoring in real-time exchange balance totals across all connected accounts.
+
+### Transaction Management
+- Dedicated transactions powerhouse view with comprehensive filtering by transaction type (Income, Expense, Transfer), linked account, category, and date range.
+- Real-time text search across transaction notes, categories, accounts, and amounts.
+- Inline row interactions on hover for editing, deleting, or one-click duplicating past entries.
+- Structured pagination with configurable page sizes (10, 25, 50 items per page) and tabular numerical formatting to prevent layout jitter.
+
+### Budgets & Net Worth Deductions
+- Category-level monthly spending limits with color-coded progress bars and automated threshold warnings at 80% and 100%.
+- Committed Monthly Spend option: allows specific recurring monthly budgets to be automatically deducted from your net worth calculations as committed expenditure.
+
+### Savings Goals & Milestones
+- Target-based savings tracking with target amounts, target dates, and linked accounts.
+- Incremental contribution modal to record deposits toward specific goals.
+
+### Command Palette
+- Global shortcut (`Cmd+K` on macOS or `Ctrl+K` on Windows/Linux) to access search, jump between application pages, trigger new transactions, or toggle privacy settings instantly.
+
+### Privacy Mode & Offline Capabilities
+- One-click Privacy Mode that applies a localized 8px blur and disables text selection across sensitive financial figures.
+- Service worker implementation allowing full offline access and fast resource caching.
+- JSON backup export and restore utility for data ownership and local data migration.
 
 ---
 
-## 🚀 Getting Started
+## Technology Stack
+
+- Frontend Framework: React 19 with TypeScript
+- Build Tool: Vite 7
+- State Management: Zustand with persistence middleware
+- Styling: Tailwind CSS (custom dark theme and glassmorphic surface tokens)
+- Charting: Recharts
+- Icons: Lucide React
+- PWA Integration: vite-plugin-pwa (Workbox)
+
+---
+
+## Getting Started
 
 ### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm** or **yarn** / **pnpm**
+- Node.js 18.0 or newer
+- npm, yarn, or pnpm
 
 ### Installation
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/abdelghany-77/sub-wise.git
-cd sub-wise
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/abdelghany-77/sub-wise.git
+   cd sub-wise
+   ```
 
-# 2. Install dependencies
-npm install
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-# 3. Start local development server
-npm run dev
-```
+3. Start the local development server:
+   ```bash
+   npm run dev
+   ```
 
-Open your browser at `http://localhost:5173` (or the URL shown in terminal).
-
-### Available Scripts
-
-- `npm run dev` — Starts Vite dev server with hot module replacement
-- `npm run build` — Compiles TypeScript (`tsc -b`) and bundles production assets with Vite
-- `npm run preview` — Locally previews the generated production build
-- `npm run typecheck` — Validates all TypeScript types without emitting files
+4. Open your browser at the local URL printed in the terminal (typically `http://localhost:5173`).
 
 ---
 
-## 📱 PWA & Mobile Installation
+## Available Scripts
 
-Walleteer is fully installable as a standalone Progressive Web App across all platforms:
-
-- **Desktop (Chrome / Edge / Brave)**: Click the **Install** icon in the browser address bar.
-- **iOS (Safari)**: Tap the **Share** button → **Add to Home Screen**.
-- **Android (Chrome)**: Tap the menu (three dots) → **Install App** / **Add to Home screen**.
+- `npm run dev`: Starts the Vite development server with hot module replacement.
+- `npm run build`: Type-checks TypeScript code and compiles the production bundle into `dist/`.
+- `npm run preview`: Starts a local server to preview the production build.
+- `npm run typecheck`: Runs `tsc -b --noEmit` to validate all TypeScript types.
 
 ---
 
-## 🏗️ Project Structure
+## PWA Installation
+
+Walleteer can be installed natively as a standalone application:
+
+- Desktop (Chrome, Edge, Brave): Click the Install icon on the right side of the address bar.
+- iOS (Safari): Tap the Share button in Safari, then select "Add to Home Screen".
+- Android (Chrome): Tap the browser menu (three dots) and select "Install App" or "Add to Home screen".
+
+---
+
+## Directory Structure
 
 ```
 src/
 ├── components/
-│   ├── accounts/        # Account cards, creation & balance overview
-│   ├── budgets/         # Category budgets & Net Worth auto-deduction
-│   ├── charts/          # Donut, trend line, and income/expense charts
-│   ├── dashboard/       # Summary cards, sparklines & recent activity
-│   ├── data/            # JSON Backup export, import & danger zone
-│   ├── goals/           # Savings targets, deadline & contribution logic
-│   ├── layout/          # Sidebar, responsive navigation & top bar
-│   ├── reports/         # Monthly breakdown & historical comparisons
-│   ├── settings/        # Currency, date formats & calendar preferences
-│   ├── transactions/    # Powerhouse table, multi-filter & add/edit modal
-│   └── ui/              # Buttons, Cards, Modals, CommandPalette, Toasts
-├── data/                # Initial demo accounts & transactions
-├── lib/                 # Formatting utilities & ID generators
-├── store/               # Zustand store with persistence & migrations
-└── types/               # TypeScript schemas and category definitions
+│   ├── accounts/        # Account cards, creation, and balance lists
+│   ├── budgets/         # Category limits and net worth deduction settings
+│   ├── charts/          # Donut, trend line, and income/expense chart components
+│   ├── dashboard/       # Summary cards, sparklines, and recent activity
+│   ├── data/            # JSON export, import, and data reset tools
+│   ├── goals/           # Savings targets, deadlines, and contribution flows
+│   ├── layout/          # Desktop sidebar, mobile bottom navigation, and top bar
+│   ├── reports/         # Monthly summaries and category analysis
+│   ├── settings/        # Currency preferences, date format, and start of week
+│   ├── transactions/    # Full transactions ledger, filter toolbar, and edit modals
+│   └── ui/              # Reusable buttons, cards, modals, command palette, toasts
+├── data/                # Initial sample accounts and transaction records
+├── lib/                 # Formatting utilities, currency helpers, and ID generators
+├── store/               # Zustand state stores with localStorage migration
+└── types/               # TypeScript interfaces, types, and category constants
 ```
 
 ---
 
-## 📄 License
+## Privacy Notice
 
-This project is open source and available under the [MIT License](LICENSE).
+All data created in Walleteer remains exclusively inside your device's browser storage (`localStorage`). No tracking scripts, analytics, or remote database connections are included.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
