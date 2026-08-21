@@ -20,7 +20,13 @@ interface StatCardProps {
 }
 
 /** Mini inline SVG sparkline */
-function Sparkline({ data, color = "#3B82F6" }: { data: number[]; color?: string }) {
+function Sparkline({
+  data,
+  color = "#3B82F6",
+}: {
+  data: number[];
+  color?: string;
+}) {
   if (!data || data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -32,15 +38,26 @@ function Sparkline({ data, color = "#3B82F6" }: { data: number[]; color?: string
   const points = data
     .map((val, i) => {
       const x = padding + (i / (data.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((val - min) / range) * (height - padding * 2);
+      const y =
+        height - padding - ((val - min) / range) * (height - padding * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
 
   return (
-    <svg width={width} height={height} className="overflow-visible flex-shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+    <svg
+      width={width}
+      height={height}
+      className="overflow-visible flex-shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
+    >
       <defs>
-        <linearGradient id={`grad-${color.replace(/[^a-zA-Z0-9]/g, "")}`} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient
+          id={`grad-${color.replace(/[^a-zA-Z0-9]/g, "")}`}
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
           <stop offset="0%" stopColor={color} stopOpacity="0.4" />
           <stop offset="100%" stopColor={color} stopOpacity="0.0" />
         </linearGradient>
@@ -75,10 +92,14 @@ function StatCard({
   sparklineColor = "#3B82F6",
   children,
 }: StatCardProps) {
-  const hasDelta = deltaPercent !== undefined && deltaPercent !== null && !isNaN(deltaPercent);
+  const hasDelta =
+    deltaPercent !== undefined && deltaPercent !== null && !isNaN(deltaPercent);
 
   return (
-    <Card className="group relative overflow-hidden flex flex-col justify-between gap-3 p-4 sm:p-5" hover>
+    <Card
+      className="group relative overflow-hidden flex flex-col justify-between gap-3 p-4 sm:p-5"
+      hover
+    >
       {/* Top Header: Label & Icon */}
       <div className="flex items-center justify-between gap-3">
         <span className="stat-label">{label}</span>
@@ -131,7 +152,12 @@ function StatCard({
         )}
 
         {sparklineData && sparklineData.length > 1 && (
-          <div className={cn("transition-all duration-300", privacyMode && "privacy-blur")}>
+          <div
+            className={cn(
+              "transition-all duration-300",
+              privacyMode && "privacy-blur",
+            )}
+          >
             <Sparkline data={sparklineData} color={sparklineColor} />
           </div>
         )}
@@ -141,7 +167,8 @@ function StatCard({
 }
 
 export function DashboardStats() {
-  const { transactions, accounts, getNetWorthByCurrency, privacyMode } = useStore();
+  const { transactions, accounts, getNetWorthByCurrency, privacyMode } =
+    useStore();
 
   const { thisMonthStats, lastMonthStats, sparklines } = useMemo(() => {
     const now = new Date();
@@ -212,9 +239,11 @@ export function DashboardStats() {
         if (tx.type === "income") inc += tx.amount;
         if (tx.type === "expense") exp += tx.amount;
       }
-      incomeSpark.push(inc || (1000 + i * 200));
-      expenseSpark.push(exp || (800 + i * 150));
-      savingsSpark.push(inc > 0 ? Math.max(0, ((inc - exp) / inc) * 100) : 20 + i * 5);
+      incomeSpark.push(inc || 1000 + i * 200);
+      expenseSpark.push(exp || 800 + i * 150);
+      savingsSpark.push(
+        inc > 0 ? Math.max(0, ((inc - exp) / inc) * 100) : 20 + i * 5,
+      );
       netWorthSpark.push(Math.max(5000, 10000 + (inc - exp) * (6 - i)));
     }
 
@@ -230,45 +259,94 @@ export function DashboardStats() {
     };
   }, [transactions, accounts]);
 
-  const netWorthByCurrency = useMemo(() => getNetWorthByCurrency(), [accounts, getNetWorthByCurrency]);
+  const netWorthByCurrency = useMemo(
+    () => getNetWorthByCurrency(),
+    [accounts, getNetWorthByCurrency],
+  );
   const currencies = Object.keys(netWorthByCurrency);
 
   // Totals
   const statCurrencies = Object.keys(thisMonthStats);
   const primaryCur = statCurrencies[0] ?? accounts[0]?.currency ?? "EGP";
 
-  const currentIncome = statCurrencies.reduce((sum, c) => sum + (thisMonthStats[c]?.income ?? 0), 0);
-  const prevIncome = statCurrencies.reduce((sum, c) => sum + (lastMonthStats[c]?.income ?? 0), 0);
-  const incomeDelta = prevIncome > 0 ? ((currentIncome - prevIncome) / prevIncome) * 100 : (currentIncome > 0 ? 100 : 0);
+  const currentIncome = statCurrencies.reduce(
+    (sum, c) => sum + (thisMonthStats[c]?.income ?? 0),
+    0,
+  );
+  const prevIncome = statCurrencies.reduce(
+    (sum, c) => sum + (lastMonthStats[c]?.income ?? 0),
+    0,
+  );
+  const incomeDelta =
+    prevIncome > 0
+      ? ((currentIncome - prevIncome) / prevIncome) * 100
+      : currentIncome > 0
+        ? 100
+        : 0;
 
-  const currentExpense = statCurrencies.reduce((sum, c) => sum + (thisMonthStats[c]?.expenses ?? 0), 0);
-  const prevExpense = statCurrencies.reduce((sum, c) => sum + (lastMonthStats[c]?.expenses ?? 0), 0);
-  const expenseDelta = prevExpense > 0 ? ((currentExpense - prevExpense) / prevExpense) * 100 : (currentExpense > 0 ? 100 : 0);
+  const currentExpense = statCurrencies.reduce(
+    (sum, c) => sum + (thisMonthStats[c]?.expenses ?? 0),
+    0,
+  );
+  const prevExpense = statCurrencies.reduce(
+    (sum, c) => sum + (lastMonthStats[c]?.expenses ?? 0),
+    0,
+  );
+  const expenseDelta =
+    prevExpense > 0
+      ? ((currentExpense - prevExpense) / prevExpense) * 100
+      : currentExpense > 0
+        ? 100
+        : 0;
 
   const totalIncomeDisplay =
     statCurrencies.length === 1
-      ? formatCurrency(thisMonthStats[statCurrencies[0]].income, statCurrencies[0])
-      : statCurrencies.map((c) => formatCurrency(thisMonthStats[c].income, c)).join(" + ");
+      ? formatCurrency(
+          thisMonthStats[statCurrencies[0]].income,
+          statCurrencies[0],
+        )
+      : statCurrencies
+          .map((c) => formatCurrency(thisMonthStats[c].income, c))
+          .join(" + ");
 
   const totalExpensesDisplay =
     statCurrencies.length === 1
-      ? formatCurrency(thisMonthStats[statCurrencies[0]].expenses, statCurrencies[0])
-      : statCurrencies.map((c) => formatCurrency(thisMonthStats[c].expenses, c)).join(" + ");
+      ? formatCurrency(
+          thisMonthStats[statCurrencies[0]].expenses,
+          statCurrencies[0],
+        )
+      : statCurrencies
+          .map((c) => formatCurrency(thisMonthStats[c].expenses, c))
+          .join(" + ");
 
   // Savings rate
-  const primaryThisMonth = thisMonthStats[primaryCur] ?? { income: 0, expenses: 0 };
+  const primaryThisMonth = thisMonthStats[primaryCur] ?? {
+    income: 0,
+    expenses: 0,
+  };
   const primarySavings = primaryThisMonth.income - primaryThisMonth.expenses;
-  const savingsRate = primaryThisMonth.income > 0 ? ((primarySavings / primaryThisMonth.income) * 100).toFixed(0) : "0";
+  const savingsRate =
+    primaryThisMonth.income > 0
+      ? ((primarySavings / primaryThisMonth.income) * 100).toFixed(0)
+      : "0";
 
-  const primaryLastMonth = lastMonthStats[primaryCur] ?? { income: 0, expenses: 0 };
+  const primaryLastMonth = lastMonthStats[primaryCur] ?? {
+    income: 0,
+    expenses: 0,
+  };
   const prevSavings = primaryLastMonth.income - primaryLastMonth.expenses;
-  const prevSavingsRate = primaryLastMonth.income > 0 ? ((prevSavings / primaryLastMonth.income) * 100).toFixed(0) : "0";
+  const prevSavingsRate =
+    primaryLastMonth.income > 0
+      ? ((prevSavings / primaryLastMonth.income) * 100).toFixed(0)
+      : "0";
   const savingsRateDelta = Number(savingsRate) - Number(prevSavingsRate);
 
   // Net worth display string
   const netWorthDisplay =
     currencies.length > 0
-      ? currencies.map((cur) => formatCurrency(netWorthByCurrency[cur], cur)).join(" + ")
+      ? currencies
+          .map((cur) => formatCurrency(netWorthByCurrency[cur], cur))
+          .join(" + ")
       : formatCurrency(0);
 
   return (
@@ -288,9 +366,17 @@ export function DashboardStats() {
         sparklineColor="#3B82F6"
       >
         {currencies.length > 1 && (
-          <div className={cn("flex flex-col gap-0.5 mt-1 transition-all duration-300", privacyMode && "privacy-blur")}>
+          <div
+            className={cn(
+              "flex flex-col gap-0.5 mt-1 transition-all duration-300",
+              privacyMode && "privacy-blur",
+            )}
+          >
             {currencies.map((cur) => (
-              <span key={cur} className="stat-value text-white text-sm font-mono">
+              <span
+                key={cur}
+                className="stat-value text-white text-sm font-mono"
+              >
                 {formatCurrency(netWorthByCurrency[cur], cur)}
               </span>
             ))}
@@ -298,9 +384,9 @@ export function DashboardStats() {
         )}
       </StatCard>
 
-      {/* 2. Total Inflow / Income */}
+      {/* 2. Total income / Income */}
       <StatCard
-        label="Inflow This Month"
+        label="income This Month"
         value={totalIncomeDisplay}
         icon={<TrendingUp size={20} />}
         iconBg="rgba(16,185,129,0.2)"
@@ -313,9 +399,9 @@ export function DashboardStats() {
         sparklineColor="#10B981"
       />
 
-      {/* 3. Total Outflow / Expenses */}
+      {/* 3. Total outcome / Expenses */}
       <StatCard
-        label="Outflow This Month"
+        label="outcome This Month"
         value={totalExpensesDisplay}
         icon={<TrendingDown size={20} />}
         iconBg="rgba(244,63,94,0.2)"

@@ -355,7 +355,9 @@ export const useStore = create<WealthState>()(
       },
 
       getNetWorth: () => {
-        return get().accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const rawNetWorth = get().accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const committedBudgets = get().budgets.filter((b) => b.deductFromNetWorth).reduce((sum, b) => sum + b.limit, 0);
+        return rawNetWorth - committedBudgets;
       },
 
       getNetWorthByCurrency: () => {
@@ -363,6 +365,13 @@ export const useStore = create<WealthState>()(
         for (const acc of get().accounts) {
           byCurrency[acc.currency] =
             (byCurrency[acc.currency] ?? 0) + acc.balance;
+        }
+        // Deduct monthly budgets committed from net worth
+        for (const b of get().budgets) {
+          if (b.deductFromNetWorth && b.limit > 0) {
+            const cur = b.currency || get().accounts[0]?.currency || "EGP";
+            byCurrency[cur] = (byCurrency[cur] ?? 0) - b.limit;
+          }
         }
         return byCurrency;
       },

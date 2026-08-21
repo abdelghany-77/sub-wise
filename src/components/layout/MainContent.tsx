@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Coins, Eye, EyeOff, Plus, Settings, Database, Search, Command } from "lucide-react";
 import { DashboardStats } from "../dashboard/DashboardStats";
+import { RecentTransactions } from "../dashboard/RecentTransactions";
 import { SpendingDonut } from "../charts/SpendingDonut";
 import { BalanceTrendChart } from "../charts/BalanceTrendChart";
 import { IncomeExpenseChart } from "../charts/IncomeExpenseChart";
@@ -141,7 +142,7 @@ export function MainContent({ page, onChangePage }: Props) {
               <BalanceTrendChart />
             </div>
             <IncomeExpenseChart />
-            <TransactionHistory />
+            <RecentTransactions onViewAll={() => onChangePage("transactions")} />
           </>
         )}
 

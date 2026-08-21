@@ -119,6 +119,8 @@ export interface Budget {
   limit: number;
   currency: string;
   createdAt: string;
+  deductFromNetWorth?: boolean;
+  accountId?: string;
 }
 
 export interface SavingsGoal {
