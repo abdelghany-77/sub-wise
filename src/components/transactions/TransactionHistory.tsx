@@ -3,6 +3,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import {
   Trash2,
   Pencil,
+  Copy,
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
@@ -16,8 +17,9 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
+import { useToastStore } from "../../store/useToastStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, formatDate } from "../../lib/utils";
+import { formatCurrency, formatDate, todayISO } from "../../lib/utils";
 import type { Transaction } from "../../types";
 import {
   EXPENSE_CATEGORIES,
@@ -38,9 +40,16 @@ type SortField = "date" | "amount" | "category";
 type SortDir = "asc" | "desc";
 
 export function TransactionHistory() {
-  const { transactions, accounts, deleteTransaction, getAccountById } =
-    useStore();
-  const { privacyMode } = useStore();
+  const {
+    transactions,
+    accounts,
+    deleteTransaction,
+    addTransaction,
+    getAccountById,
+    privacyMode,
+  } = useStore();
+  const { addToast } = useToastStore();
+
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterAccount, setFilterAccount] = useState("all");
@@ -54,7 +63,7 @@ export function TransactionHistory() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   const filtered = useMemo(() => {
     let result = transactions.filter((tx) => {
@@ -75,7 +84,8 @@ export function TransactionHistory() {
         return (
           tx.note.toLowerCase().includes(q) ||
           tx.category.toLowerCase().includes(q) ||
-          acc?.name.toLowerCase().includes(q)
+          acc?.name.toLowerCase().includes(q) ||
+          String(tx.amount).includes(q)
         );
       }
       return true;
@@ -124,26 +134,54 @@ export function TransactionHistory() {
     dateTo,
     sortField,
     sortDir,
+    pageSize,
   ]);
+
+  const handleDuplicate = (tx: Transaction) => {
+    addTransaction({
+      type: tx.type,
+      amount: tx.amount,
+      category: tx.category,
+      note: tx.note ? `${tx.note} (Copy)` : "Copy",
+      date: todayISO(),
+      accountId: tx.accountId,
+      toAccountId: tx.toAccountId,
+      isRecurring: false,
+    });
+    addToast({
+      type: "success",
+      message: `Duplicated transaction "${tx.note || tx.category}"`,
+      duration: 3500,
+    });
+  };
 
   const TypeIcon = ({ type }: { type: Transaction["type"] }) => {
     if (type === "income")
-      return <ArrowDownLeft size={14} className="text-emerald-400" />;
+      return <ArrowDownLeft size={15} className="text-emerald-400" />;
     if (type === "expense")
-      return <ArrowUpRight size={14} className="text-rose-400" />;
-    return <ArrowLeftRight size={14} className="text-sky-400" />;
+      return <ArrowUpRight size={15} className="text-rose-400" />;
+    return <ArrowLeftRight size={15} className="text-sky-400" />;
   };
 
+  const startResult = filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endResult = Math.min(safeCurrentPage * pageSize, filtered.length);
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5 pb-24 sm:pb-8">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="section-title">Transaction History</h2>
-        <span className="text-sm text-white/40">
+        <div>
+          <h2 className="section-title">Transaction History</h2>
+          <p className="text-xs text-white/40 mt-0.5">
+            Manage, filter, and review all account movements
+          </p>
+        </div>
+        <span className="text-xs font-mono bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-full text-white/60">
           {filtered.length} transaction{filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
-      {/* Filters */}
+      {/* Filter Toolbar */}
       <Card padding="sm" className="space-y-3">
         {/* Search */}
         <div className="relative">
@@ -153,25 +191,25 @@ export function TransactionHistory() {
           />
           <input
             className="input-base pl-10 text-sm"
-            placeholder="Search transactions..."
+            placeholder="Search by note, category, account, or amount..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
         {/* Filter Row */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {/* Type Tabs */}
-          <div className="flex bg-white/[0.04] rounded-lg p-1 gap-0.5 sm:gap-1 flex-wrap">
+          <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-xl p-1 gap-1 flex-wrap">
             {(["all", "income", "expense", "transfer"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setFilterType(t)}
                 className={cn(
-                  "px-2 sm:px-3 py-1 rounded-md text-xs font-medium capitalize transition-all duration-200",
+                  "px-3 py-1 rounded-lg text-xs font-medium capitalize transition-all duration-200 min-h-[32px]",
                   filterType === t
-                    ? "bg-blue-500 text-white"
-                    : "text-white/50 hover:text-white",
+                    ? "bg-blue-500 text-white shadow-sm"
+                    : "text-white/50 hover:text-white hover:bg-white/[0.04]",
                 )}
               >
                 {t}
@@ -181,7 +219,7 @@ export function TransactionHistory() {
 
           {/* Account Filter */}
           <select
-            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#111827]"
+            className="input-base text-xs py-2 flex-1 min-w-[130px] min-h-[38px] [&>option]:bg-[#111827]"
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
             aria-label="Filter transactions by account"
@@ -189,14 +227,14 @@ export function TransactionHistory() {
             <option value="all">All Accounts</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}
+                {a.name} ({a.currency})
               </option>
             ))}
           </select>
 
           {/* Category Filter */}
           <select
-            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#111827]"
+            className="input-base text-xs py-2 flex-1 min-w-[130px] min-h-[38px] [&>option]:bg-[#111827]"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             aria-label="Filter transactions by category"
@@ -211,11 +249,11 @@ export function TransactionHistory() {
 
         {/* Date Range + Sort Row */}
         <div className="flex gap-2 flex-wrap items-end">
-          <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+          <div className="flex items-center gap-1.5 flex-1 min-w-[220px]">
             <Calendar size={14} className="text-white/30 flex-shrink-0" />
             <input
               type="date"
-              className="input-base text-xs py-1.5 flex-1"
+              className="input-base text-xs py-1.5 flex-1 min-h-[38px]"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               aria-label="Filter from date"
@@ -224,7 +262,7 @@ export function TransactionHistory() {
             <span className="text-white/30 text-xs">–</span>
             <input
               type="date"
-              className="input-base text-xs py-1.5 flex-1"
+              className="input-base text-xs py-1.5 flex-1 min-h-[38px]"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               aria-label="Filter to date"
@@ -235,7 +273,7 @@ export function TransactionHistory() {
           <div className="flex items-center gap-1.5">
             <ArrowUpDown size={14} className="text-white/30 flex-shrink-0" />
             <select
-              className="input-base text-xs py-1.5 min-w-[100px] [&>option]:bg-[#111827]"
+              className="input-base text-xs py-1.5 min-w-[100px] min-h-[38px] [&>option]:bg-[#111827]"
               value={sortField}
               onChange={(e) => setSortField(e.target.value as SortField)}
               aria-label="Sort transactions by"
@@ -246,7 +284,7 @@ export function TransactionHistory() {
             </select>
             <button
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all text-xs font-medium min-w-[44px] text-center"
+              className="px-3 py-2 rounded-xl text-white/60 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition-all text-xs font-medium min-h-[38px] text-center"
               aria-label={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
             >
               {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
@@ -255,12 +293,12 @@ export function TransactionHistory() {
         </div>
       </Card>
 
-      {/* Table */}
+      {/* Transaction Table / List */}
       {filtered.length === 0 ? (
         <Card className="text-center py-16">
           <Filter size={36} className="mx-auto text-white/20 mb-3" />
           <p className="text-white/40 text-sm">
-            No transactions match your filters
+            No transactions match your current filters
           </p>
         </Card>
       ) : (
@@ -272,28 +310,37 @@ export function TransactionHistory() {
               : undefined;
             const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
 
+            const borderTypeClass =
+              tx.type === "income"
+                ? "border-l-emerald-500"
+                : tx.type === "expense"
+                  ? "border-l-rose-500"
+                  : "border-l-sky-500";
+
             return (
               <div
                 key={tx.id}
-                className="glass-card-hover group flex items-center gap-3 sm:gap-4 p-3 sm:p-4"
+                className={cn(
+                  "glass-card-hover group relative flex items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-l-[3px] transition-all duration-200",
+                  borderTypeClass,
+                )}
               >
-                {/* Category dot + icon */}
+                {/* Category Icon */}
                 <div
-                  className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center"
+                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
                   style={{ backgroundColor: `${catColor}20` }}
                 >
                   <TypeIcon type={tx.type} />
                 </div>
 
-                {/* Info + Amount wrapper */}
+                {/* Info */}
                 <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  {/* Top row: note + category badge */}
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-white break-words">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-white break-words">
                       {tx.note || tx.category}
                     </p>
                     <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                       style={{
                         backgroundColor: `${catColor}20`,
                         color: catColor,
@@ -301,54 +348,71 @@ export function TransactionHistory() {
                     >
                       {tx.category}
                     </span>
+                    {tx.isRecurring && (
+                      <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        {tx.recurrenceFrequency || "Recurring"}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Bottom row: account · date + amount */}
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs text-white/40 min-w-0 break-words">
-                      {fromAcc?.name}
-                      {toAcc && (
-                        <span className="text-sky-400/70"> → {toAcc.name}</span>
-                      )}
-                      {" · "}
+                  <p className="text-xs text-white/40 min-w-0">
+                    <span className="text-white/60">{fromAcc?.name}</span>
+                    {toAcc && (
+                      <span className="text-sky-400/80"> → {toAcc.name}</span>
+                    )}
+                    {" · "}
+                    <span className="font-mono text-white/40">
                       {formatDate(tx.date)}
-                    </p>
-
-                    {/* Amount visible on all screen sizes */}
-                    <p
-                      className={cn(
-                        "text-sm font-bold font-mono transition-all duration-300 shrink-0",
-                        tx.type === "income" && "text-emerald-400",
-                        tx.type === "expense" && "text-rose-400",
-                        tx.type === "transfer" && "text-sky-400",
-                        privacyMode && "privacy-blur",
-                      )}
-                    >
-                      {tx.type === "income"
-                        ? "+"
-                        : tx.type === "expense"
-                          ? "-"
-                          : ""}
-                      {formatCurrency(tx.amount, fromAcc?.currency)}
-                    </p>
-                  </div>
+                    </span>
+                  </p>
                 </div>
 
-                {/* Edit + Delete */}
-                <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
+                {/* Amount */}
+                <div className="text-right flex-shrink-0">
+                  <p
+                    className={cn(
+                      "text-sm sm:text-base font-bold font-mono transition-all duration-300",
+                      tx.type === "income" && "text-emerald-400",
+                      tx.type === "expense" && "text-rose-400",
+                      tx.type === "transfer" && "text-sky-400",
+                      privacyMode && "privacy-blur",
+                    )}
+                  >
+                    {tx.type === "income"
+                      ? "+"
+                      : tx.type === "expense"
+                        ? "-"
+                        : ""}
+                    {formatCurrency(tx.amount, fromAcc?.currency)}
+                  </p>
+                </div>
+
+                {/* Inline Hover Action Buttons: Edit, Duplicate, Delete */}
+                <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+                  <button
+                    type="button"
+                    aria-label="Duplicate transaction"
+                    title="Duplicate transaction"
+                    onClick={() => handleDuplicate(tx)}
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-all"
+                  >
+                    <Copy size={14} />
+                  </button>
                   <button
                     type="button"
                     aria-label="Edit transaction"
+                    title="Edit transaction"
                     onClick={() => setEditingTx(tx)}
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     type="button"
                     aria-label="Delete transaction"
+                    title="Delete transaction"
                     onClick={() => setConfirmDelete(tx.id)}
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -359,59 +423,92 @@ export function TransactionHistory() {
         </div>
       )}
 
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <p className="text-xs text-white/40">
-            Showing {(safeCurrentPage - 1) * pageSize + 1}–
-            {Math.min(safeCurrentPage * pageSize, filtered.length)} of{" "}
-            {filtered.length}
+      {/* Redesigned Table Pagination */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+        {/* Left side: Range info + page-size selector */}
+        <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
+          <p className="text-xs text-white/50 font-mono">
+            Showing{" "}
+            <span className="text-white font-medium">
+              {startResult}–{endResult}
+            </span>{" "}
+            of <span className="text-white font-medium">{filtered.length}</span>{" "}
+            results
           </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
-              aria-label="First page"
+
+          <div className="flex items-center gap-1.5 text-xs text-white/40">
+            <span>Per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-[#111827] border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              aria-label="Items per page"
             >
-              <ChevronsLeft size={16} />
-            </button>
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
-              aria-label="Previous page"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-xs text-white/60 px-2 font-medium">
-              {safeCurrentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safeCurrentPage === totalPages}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
-              aria-label="Next page"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={safeCurrentPage === totalPages}
-              className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all disabled:opacity-25 disabled:pointer-events-none"
-              aria-label="Last page"
-            >
-              <ChevronsRight size={16} />
-            </button>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
           </div>
         </div>
-      )}
+
+        {/* Right side: Pill buttons for <<, <, Page X of Y, >, >> */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={safeCurrentPage === 1}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
+            aria-label="First page"
+            title="First page"
+          >
+            <ChevronsLeft size={15} />
+          </button>
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={safeCurrentPage === 1}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
+            aria-label="Previous page"
+            title="Previous page"
+          >
+            <ChevronLeft size={15} />
+          </button>
+
+          <div className="px-3 py-1 rounded-lg bg-[#111827] border border-white/[0.08] text-xs font-mono text-white/80 min-w-[84px] text-center">
+            <span className="text-white font-semibold">{safeCurrentPage}</span>
+            <span className="text-white/30 mx-1">/</span>
+            <span>{totalPages}</span>
+          </div>
+
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safeCurrentPage === totalPages}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
+            aria-label="Next page"
+            title="Next page"
+          >
+            <ChevronRight size={15} />
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={safeCurrentPage === totalPages}
+            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
+            aria-label="Last page"
+            title="Last page"
+          >
+            <ChevronsRight size={15} />
+          </button>
+        </div>
+      </div>
 
       {/* Delete Confirm */}
       <ConfirmDialog
         isOpen={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
-        onConfirm={() => { if (confirmDelete) deleteTransaction(confirmDelete); }}
+        onConfirm={() => {
+          if (confirmDelete) deleteTransaction(confirmDelete);
+        }}
         title="Delete Transaction?"
         message="This will reverse the balance effect on the associated account(s)."
       />
