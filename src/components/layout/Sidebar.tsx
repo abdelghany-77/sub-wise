@@ -61,17 +61,17 @@ export function Sidebar({ current, onChange }: Props) {
   return (
     <>
       {/* Desktop Sidebar — hidden on mobile */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col bg-[#0d0d14] border-r border-white/[0.06] lg:static lg:z-auto">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col bg-[#0B0F17] border-r border-white/[0.06] lg:static lg:z-auto">
         {/* Logo */}
         <div className="flex items-center px-6 h-16 border-b border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center shadow-glow">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-glow">
               <Coins size={22} className="text-white" />
             </div>
             <div>
-              <span className="text-white font-bold text-lg leading-none">SubWise</span>
+              <span className="text-white font-bold text-lg leading-none">Walleteer</span>
               <span className="block text-[10px] text-blue-400/70 font-medium tracking-wider uppercase leading-tight">
-                Wealth Tracker
+                Finance Tracker
               </span>
             </div>
           </div>
@@ -102,13 +102,13 @@ export function Sidebar({ current, onChange }: Props) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-white/[0.06]">
           <p className="text-[11px] text-white/25 text-center">
-            All data stored locally · v0.1.1
+            All data stored locally · v0.2.0
           </p>
         </div>
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-[#0d0d14]/95 backdrop-blur-md border-t border-white/[0.06] flex items-stretch mobile-bottom-nav">
+      <nav className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-[#0B0F17]/95 backdrop-blur-md border-t border-white/[0.06] flex items-stretch mobile-bottom-nav">
         {MOBILE_NAV_ITEMS.map(({ page, label, icon }) => (
           <button
             key={page}

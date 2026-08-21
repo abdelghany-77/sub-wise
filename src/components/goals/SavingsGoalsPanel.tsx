@@ -155,7 +155,7 @@ export function SavingsGoalsPanel() {
             <p
               className={cn(
                 "text-lg font-bold text-white",
-                privacyMode && "blur-md select-none",
+                privacyMode && "privacy-blur",
               )}
             >
               {formatCurrency(totalTarget, savingsGoals[0]?.currency)}
@@ -171,7 +171,7 @@ export function SavingsGoalsPanel() {
             <p
               className={cn(
                 "text-lg font-bold text-white",
-                privacyMode && "blur-md select-none",
+                privacyMode && "privacy-blur",
               )}
             >
               {formatCurrency(totalSaved, savingsGoals[0]?.currency)}
@@ -258,7 +258,7 @@ export function SavingsGoalsPanel() {
                     <span
                       className={cn(
                         "font-bold",
-                        privacyMode && "blur-md select-none",
+                        privacyMode && "privacy-blur",
                       )}
                       style={{ color: g.color }}
                     >
@@ -267,7 +267,7 @@ export function SavingsGoalsPanel() {
                     <span
                       className={cn(
                         "text-white/40 text-xs",
-                        privacyMode && "blur-md select-none",
+                        privacyMode && "privacy-blur",
                       )}
                     >
                       of {formatCurrency(g.targetAmount, g.currency)}
@@ -393,7 +393,7 @@ export function SavingsGoalsPanel() {
                   className={cn(
                     "w-8 h-8 rounded-lg transition-all",
                     form.color === c
-                      ? "ring-2 ring-white ring-offset-2 ring-offset-[#131320] scale-110"
+                      ? "ring-2 ring-white ring-offset-2 ring-offset-[#111827] scale-110"
                       : "opacity-60 hover:opacity-100",
                   )}
                   style={{ backgroundColor: c }}

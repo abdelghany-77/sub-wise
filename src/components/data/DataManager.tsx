@@ -35,7 +35,7 @@ export function DataManager() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `subwise-backup-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `walleteer-backup-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -72,7 +72,7 @@ export function DataManager() {
       } catch {
         setImportStatus("error");
         setImportMsg(
-          "Failed to import. Make sure this is a valid SubWise backup file.",
+          "Failed to import. Make sure this is a valid Walleteer backup file.",
         );
       }
       // Reset input

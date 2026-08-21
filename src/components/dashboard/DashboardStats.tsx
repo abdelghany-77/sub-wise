@@ -42,7 +42,7 @@ function StatCard({
           <p
             className={cn(
               "stat-value mt-1 text-white transition-all duration-300",
-              privacyMode && "blur-md select-none",
+              privacyMode && "privacy-blur",
             )}
           >
             {value}
@@ -54,7 +54,7 @@ function StatCard({
             className={cn(
               "text-xs mt-1 flex items-center gap-1 transition-all duration-300",
               trendUp ? "text-emerald-400" : "text-rose-400",
-              privacyMode && "blur-md select-none",
+              privacyMode && "privacy-blur",
             )}
           >
             {trendUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -149,15 +149,15 @@ export function DashboardStats() {
         label="Net Worth"
         value={currencies.length <= 1 ? netWorthDisplay : ""}
         icon={<DollarSign size={22} />}
-        iconBg="rgba(124,58,237,0.2)"
-        iconColor="#a78bfa"
+        iconBg="rgba(59,130,246,0.2)"
+        iconColor="#60a5fa"
         privacyMode={privacyMode}
       >
         {currencies.length > 1 && (
           <div
             className={cn(
               "flex flex-col gap-0.5 mt-1 transition-all duration-300",
-              privacyMode && "blur-md select-none",
+              privacyMode && "privacy-blur",
             )}
           >
             {currencies.map((cur) => (

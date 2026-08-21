@@ -13,7 +13,7 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-3 shadow-xl">
+    <div className="bg-[#111827] border border-white/10 rounded-xl p-3 shadow-xl">
       <p className="text-white/50 text-xs mb-2">{label}</p>
       {payload.map((p) => (
         <p key={p.name} className="text-sm font-mono font-medium" style={{ color: p.color }}>
@@ -66,7 +66,7 @@ export function IncomeExpenseChart() {
     <Card>
       <h3 className="section-title mb-1">Income vs Expenses</h3>
       <p className="text-xs text-white/40 mb-6">Last 6 months comparison</p>
-      <div className={cn("transition-all duration-300", privacyMode && "blur-lg select-none pointer-events-none")}>
+      <div className={cn("transition-all duration-300", privacyMode && "privacy-blur pointer-events-none")}>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />

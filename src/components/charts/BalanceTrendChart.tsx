@@ -22,7 +22,7 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-3 shadow-xl">
+    <div className="bg-[#111827] border border-white/10 rounded-xl p-3 shadow-xl">
       <p className="text-white/50 text-xs mb-1">{label}</p>
       <p className="text-white font-bold font-mono">
         {formatCurrency(payload[0].value)}
@@ -117,7 +117,7 @@ export function BalanceTrendChart() {
       <div
         className={cn(
           "transition-all duration-300",
-          privacyMode && "blur-lg select-none pointer-events-none",
+          privacyMode && "privacy-blur pointer-events-none",
         )}
       >
         <ResponsiveContainer width="100%" height={200}>

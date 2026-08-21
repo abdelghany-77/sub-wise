@@ -38,7 +38,7 @@ function AppContent() {
   }, [processRecurring]);
 
   return (
-    <div className="flex h-[100dvh] bg-[#0d0d14] overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#0B0F17] overflow-hidden">
       <Sidebar current={page} onChange={setPage} />
       <MainContent page={page} onChangePage={setPage} />
       <ToastContainer />

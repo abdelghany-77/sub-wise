@@ -111,7 +111,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative z-10 w-full bg-[#131320] border-white/10 shadow-2xl animate-slide-up flex flex-col",
+          "relative z-10 w-full bg-[#111827] border-white/10 shadow-2xl animate-slide-up flex flex-col",
           // Mobile: true full screen
           "h-[100dvh] border-0 rounded-none",
           // Desktop: centered card, but larger

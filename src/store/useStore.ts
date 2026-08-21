@@ -5,6 +5,21 @@ import { generateId } from "../lib/utils";
 import { DEMO_ACCOUNTS, DEMO_TRANSACTIONS } from "../data/demo";
 import { useToastStore } from "./useToastStore";
 
+// Migrate localStorage key from old "subwise-wealth-data" to "walleteer-wealth-data"
+(function migrateStorageKey() {
+  const OLD_KEY = "subwise-wealth-data";
+  const NEW_KEY = "walleteer-wealth-data";
+  try {
+    const oldData = localStorage.getItem(OLD_KEY);
+    if (oldData && !localStorage.getItem(NEW_KEY)) {
+      localStorage.setItem(NEW_KEY, oldData);
+      localStorage.removeItem(OLD_KEY);
+    }
+  } catch {
+    // Silently ignore storage errors
+  }
+})();
+
 export interface AppSettings {
   defaultCurrency: string;
   dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
@@ -397,7 +412,7 @@ export const useStore = create<WealthState>()(
       },
     }),
     {
-      name: "subwise-wealth-data",
+      name: "walleteer-wealth-data",
       storage: createJSONStorage(() => localStorage),
     },
   ),

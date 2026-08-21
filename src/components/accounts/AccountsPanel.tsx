@@ -127,8 +127,8 @@ export function AccountsPanel() {
           {currencies.length === 0 ? (
             <p
               className={cn(
-                `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-violet`,
-                privacyMode && "blur-md select-none",
+                `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-brand`,
+                privacyMode && "privacy-blur",
               )}
             >
               {formatCurrency(0)}
@@ -143,10 +143,10 @@ export function AccountsPanel() {
                     className={cn(
                       `text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
                         val >= 0
-                          ? "text-gradient-violet"
+                          ? "text-gradient-brand"
                           : "text-gradient-expense"
                       }`,
-                      privacyMode && "blur-md select-none",
+                      privacyMode && "privacy-blur",
                     )}
                   >
                     {formatCurrency(val, cur)}
@@ -249,7 +249,7 @@ export function AccountsPanel() {
                   key={c}
                   type="button"
                   onClick={() => setForm({ ...form, color: c })}
-                  className="w-8 h-8 rounded-full transition-all duration-200 ring-offset-2 ring-offset-[#131320]"
+                  className="w-8 h-8 rounded-full transition-all duration-200 ring-offset-2 ring-offset-[#111827]"
                   style={{
                     backgroundColor: c,
                     boxShadow: form.color === c ? `0 0 0 2px ${c}` : undefined,
@@ -382,7 +382,7 @@ function AccountCard({
           <p
             className={cn(
               "text-2xl font-bold font-mono transition-all duration-300",
-              privacyMode && "blur-md select-none",
+              privacyMode && "privacy-blur",
             )}
             style={{ color: account.color }}
           >

@@ -25,7 +25,7 @@ export function SettingsPanel() {
     <div className="space-y-6 w-full max-w-2xl mx-auto lg:mx-0">
       <div>
         <h2 className="section-title">Settings</h2>
-        <p className="text-sm text-white/40 mt-1">Customize your SubWise experience</p>
+        <p className="text-sm text-white/40 mt-1">Customize your Walleteer experience</p>
       </div>
 
       {/* General */}
@@ -111,7 +111,7 @@ export function SettingsPanel() {
         </div>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-white/50">
-            <span>Version</span><span className="text-white/80 font-mono">0.1.1</span>
+            <span>Version</span><span className="text-white/80 font-mono">0.2.0</span>
           </div>
           <div className="flex justify-between text-white/50">
             <span>Storage</span><span className="text-white/80">Local (Browser)</span>

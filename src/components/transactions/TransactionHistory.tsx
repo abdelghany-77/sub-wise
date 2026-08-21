@@ -181,7 +181,7 @@ export function TransactionHistory() {
 
           {/* Account Filter */}
           <select
-            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
+            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#111827]"
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
             aria-label="Filter transactions by account"
@@ -196,7 +196,7 @@ export function TransactionHistory() {
 
           {/* Category Filter */}
           <select
-            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#131320]"
+            className="input-base text-xs py-1.5 flex-1 min-w-[120px] [&>option]:bg-[#111827]"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             aria-label="Filter transactions by category"
@@ -235,7 +235,7 @@ export function TransactionHistory() {
           <div className="flex items-center gap-1.5">
             <ArrowUpDown size={14} className="text-white/30 flex-shrink-0" />
             <select
-              className="input-base text-xs py-1.5 min-w-[100px] [&>option]:bg-[#131320]"
+              className="input-base text-xs py-1.5 min-w-[100px] [&>option]:bg-[#111827]"
               value={sortField}
               onChange={(e) => setSortField(e.target.value as SortField)}
               aria-label="Sort transactions by"
@@ -321,7 +321,7 @@ export function TransactionHistory() {
                         tx.type === "income" && "text-emerald-400",
                         tx.type === "expense" && "text-rose-400",
                         tx.type === "transfer" && "text-sky-400",
-                        privacyMode && "blur-md select-none",
+                        privacyMode && "privacy-blur",
                       )}
                     >
                       {tx.type === "income"

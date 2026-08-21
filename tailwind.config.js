@@ -14,9 +14,9 @@ export default {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#7c3aed",
-          light: "#a78bfa",
-          dark: "#5b21b6",
+          DEFAULT: "#3B82F6",
+          light: "#60A5FA",
+          dark: "#2563EB",
         },
         income: {
           DEFAULT: "#10b981",
@@ -28,11 +28,16 @@ export default {
           light: "#fda4af",
           dark: "#be123c",
         },
+        warning: {
+          DEFAULT: "#F59E0B",
+          light: "#FCD34D",
+          dark: "#D97706",
+        },
         surface: {
-          50: "#1a1a2e",
-          100: "#16213e",
-          200: "#0f3460",
-          card: "rgba(255,255,255,0.04)",
+          50: "#0B0F17",
+          100: "#111827",
+          200: "#1a2332",
+          card: "#111827",
           border: "rgba(255,255,255,0.08)",
         },
       },
@@ -41,7 +46,7 @@ export default {
       },
       boxShadow: {
         glass: "0 4px 32px 0 rgba(0,0,0,0.37)",
-        glow: "0 0 20px rgba(124,58,237,0.3)",
+        glow: "0 0 20px rgba(59,130,246,0.3)",
         "glow-income": "0 0 20px rgba(16,185,129,0.3)",
         "glow-expense": "0 0 20px rgba(244,63,94,0.3)",
       },

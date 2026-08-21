@@ -15,7 +15,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   const item = payload[0];
   return (
-    <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-3 shadow-xl">
+    <div className="bg-[#111827] border border-white/10 rounded-xl p-3 shadow-xl">
       <p className="text-white/60 text-xs mb-1">{item.name}</p>
       <p className="text-white font-bold font-mono">
         {formatCurrency(item.value)}
@@ -104,7 +104,7 @@ export function SpendingDonut() {
       <p
         className={cn(
           "text-xs text-white/40 mb-4",
-          privacyMode && "blur-md select-none",
+          privacyMode && "privacy-blur",
         )}
       >
         This month: {formatCurrency(total)}
@@ -112,7 +112,7 @@ export function SpendingDonut() {
       <div
         className={cn(
           "transition-all duration-300",
-          privacyMode && "blur-lg select-none pointer-events-none",
+          privacyMode && "privacy-blur pointer-events-none",
         )}
       >
         <ResponsiveContainer width="100%" height={180}>

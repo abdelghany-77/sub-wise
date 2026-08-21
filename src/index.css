@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-[#0d0d14] text-white font-sans antialiased;
+    @apply bg-[#0B0F17] text-white font-sans antialiased;
     /* Mobile PWA: prevent pull-to-refresh and ensure contained scroll */
     overscroll-behavior-y: contain;
     /* Safe area padding for notched devices */
@@ -40,11 +40,11 @@
 
 @layer components {
   .glass-card {
-    @apply bg-white/[0.04] backdrop-blur-sm border border-white/[0.08] rounded-2xl;
+    @apply bg-[#111827] backdrop-blur-sm border border-white/[0.08] rounded-2xl;
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:bg-white/[0.07] hover:border-white/[0.14];
+    @apply glass-card transition-all duration-300 hover:bg-[#1a2332] hover:border-white/[0.14];
   }
 
   .btn-primary {
@@ -67,7 +67,7 @@
 
   .input-base {
     @apply w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-2.5
-           text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500/50
+           text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/40
            focus:border-blue-500/50 transition-all duration-200;
   }
 
@@ -93,6 +93,7 @@
 
   .stat-value {
     @apply text-xl sm:text-2xl font-bold font-mono tracking-tight;
+    font-variant-numeric: tabular-nums;
   }
 
   .stat-label {
@@ -111,10 +112,23 @@
   .nav-link.active {
     @apply text-white bg-blue-500/20 border border-blue-500/20;
   }
+
+  /* Enhanced privacy blur — applied to all financial values when privacy mode is on */
+  .privacy-blur {
+    filter: blur(8px);
+    transition: filter 0.3s ease, opacity 0.3s ease;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Currency values — prevent layout shift on number changes */
+  .currency-value {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer utilities {
-  .text-gradient-violet {
+  .text-gradient-brand {
     @apply bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent;
   }
   .text-gradient-income {

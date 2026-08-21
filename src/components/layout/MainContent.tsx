@@ -40,11 +40,11 @@ export function MainContent({ page, onChangePage }: Props) {
   return (
     <main className="flex-1 overflow-y-auto min-h-0 pb-20 lg:pb-0">
       {/* Top Bar */}
-      <header className="sticky top-0 z-10 bg-[#0d0d14]/80 backdrop-blur-sm border-b border-white/[0.06] px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 bg-[#0B0F17]/80 backdrop-blur-sm border-b border-white/[0.06] px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {/* Mobile Logo — shown only on small screens where sidebar is hidden */}
           <div className="lg:hidden flex items-center gap-2 flex-shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shadow-glow">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-glow">
               <Coins size={14} className="text-white" />
             </div>
           </div>
@@ -127,7 +127,7 @@ export function MainContent({ page, onChangePage }: Props) {
         <div className="fixed bottom-20 right-4 z-20 sm:hidden">
           <button
             onClick={() => setShowFAB(true)}
-            className="w-14 h-14 rounded-2xl bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-900/40 flex items-center justify-center transition-all duration-200 active:scale-95"
+            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white shadow-lg shadow-blue-900/40 flex items-center justify-center transition-all duration-200 active:scale-95"
             aria-label="Add new transaction"
           >
             <Plus size={24} />

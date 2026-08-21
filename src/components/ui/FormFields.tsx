@@ -28,7 +28,7 @@ export function Select({
         id={inputId}
         className={cn(
           "input-base appearance-none",
-          "[&>option]:bg-[#131320] [&>option]:text-white",
+          "[&>option]:bg-[#111827] [&>option]:text-white",
           error && "border-rose-500/50",
           className,
         )}
