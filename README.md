@@ -136,7 +136,3 @@ src/
 All data created in Walleteer remains exclusively inside your device's browser storage (`localStorage`). No tracking scripts, analytics, or remote database connections are included.
 
 ---
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
