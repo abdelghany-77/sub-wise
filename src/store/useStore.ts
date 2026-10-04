@@ -355,14 +355,19 @@ export const useStore = create<WealthState>()(
       },
 
       getNetWorth: () => {
-        const rawNetWorth = get().accounts.reduce((sum, acc) => sum + acc.balance, 0);
+        // Exclude savings accounts from net worth
+        const rawNetWorth = get().accounts
+          .filter((acc) => acc.type !== "savings")
+          .reduce((sum, acc) => sum + acc.balance, 0);
         const committedBudgets = get().budgets.filter((b) => b.deductFromNetWorth).reduce((sum, b) => sum + b.limit, 0);
         return rawNetWorth - committedBudgets;
       },
 
       getNetWorthByCurrency: () => {
         const byCurrency: Record<string, number> = {};
+        // Exclude savings accounts from net worth
         for (const acc of get().accounts) {
+          if (acc.type === "savings") continue;
           byCurrency[acc.currency] =
             (byCurrency[acc.currency] ?? 0) + acc.balance;
         }

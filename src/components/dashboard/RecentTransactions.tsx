@@ -71,56 +71,58 @@ export function RecentTransactions({ onViewAll }: RecentTransactionsProps) {
                 key={tx.id}
                 onClick={onViewAll}
                 className={cn(
-                  "glass-card-hover cursor-pointer group flex items-center justify-between gap-3 p-3 sm:p-3.5 rounded-xl border-l-[3px] transition-all duration-200",
+                  "glass-card-hover cursor-pointer group flex items-start gap-3 p-3 sm:p-3.5 rounded-xl border-l-[3px] transition-all duration-200",
                   borderTypeClass,
                 )}
               >
                 {/* Left: Type/Category Icon */}
                 <div
-                  className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+                  className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm mt-0.5"
                   style={{ backgroundColor: `${catColor}20` }}
                 >
                   <TypeIcon type={tx.type} />
                 </div>
 
-                {/* Center: Title & details */}
-                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-white truncate">
-                      {tx.note || tx.category}
-                    </p>
-                    <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{
-                        backgroundColor: `${catColor}20`,
-                        color: catColor,
-                      }}
+                {/* Main Content */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  {/* Top Row: Title + Category badge + Amount */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate max-w-[180px] xs:max-w-[240px] sm:max-w-none">
+                        {tx.note || tx.category}
+                      </p>
+                      <span
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
+                        style={{
+                          backgroundColor: `${catColor}20`,
+                          color: catColor,
+                        }}
+                      >
+                        {tx.category}
+                      </span>
+                    </div>
+
+                    {/* Amount */}
+                    <p
+                      className={cn(
+                        "text-sm sm:text-base font-bold font-mono whitespace-nowrap flex-shrink-0 text-right ml-1",
+                        tx.type === "income" && "text-emerald-400",
+                        tx.type === "expense" && "text-rose-400",
+                        tx.type === "transfer" && "text-sky-400",
+                        privacyMode && "privacy-blur",
+                      )}
                     >
-                      {tx.category}
-                    </span>
+                      {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
+                      {formatCurrency(tx.amount, fromAcc?.currency)}
+                    </p>
                   </div>
 
-                  <p className="text-xs text-white/40 truncate">
-                    <span className="text-white/60">{fromAcc?.name}</span>
-                    {toAcc && <span className="text-sky-400/80"> → {toAcc.name}</span>}
-                    {" · "}
-                    <span className="font-mono text-white/40">{formatDate(tx.date)}</span>
-                  </p>
-                </div>
-
-                {/* Right: Amount */}
-                <div className="text-right flex-shrink-0">
-                  <p
-                    className={cn(
-                      "text-sm sm:text-base font-bold font-mono transition-all duration-300",
-                      tx.type === "income" && "text-emerald-400",
-                      tx.type === "expense" && "text-rose-400",
-                      tx.type === "transfer" && "text-sky-400",
-                      privacyMode && "privacy-blur",
-                    )}
-                  >
-                    {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
-                    {formatCurrency(tx.amount, fromAcc?.currency)}
+                  {/* Bottom Row: Account Details + Date */}
+                  <p className="text-xs text-white/40 truncate min-w-0">
+                    <span className="text-white/70 font-medium">{fromAcc?.name}</span>
+                    {toAcc && <span className="text-sky-400/90 font-medium"> → {toAcc.name}</span>}
+                    <span className="mx-1.5 text-white/20">•</span>
+                    <span className="font-mono text-white/50">{formatDate(tx.date)}</span>
                   </p>
                 </div>
               </div>

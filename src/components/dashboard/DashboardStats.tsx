@@ -382,6 +382,7 @@ export function DashboardStats() {
             ))}
           </div>
         )}
+        <p className="text-[10px] text-white/25 mt-1">Excl. savings</p>
       </StatCard>
 
       {/* 2. Total income / Income */}

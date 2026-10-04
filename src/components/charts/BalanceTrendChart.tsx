@@ -42,8 +42,10 @@ export function BalanceTrendChart() {
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
-    // Current total balance is the "now" point
-    const currentBalance = accounts.reduce((s, a) => s + a.balance, 0);
+    // Current total balance excluding savings (consistent with net worth)
+    const currentBalance = accounts
+      .filter((a) => a.type !== "savings")
+      .reduce((s, a) => s + a.balance, 0);
 
     // Walk backwards from now to reconstruct historical balance
     const today = new Date();

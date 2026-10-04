@@ -65,7 +65,7 @@ export function ReportsPanel() {
   const defCur = accounts[0]?.currency ?? "EGP";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 lg:pb-8">
       {/* Month Selector */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="section-title">Financial Reports</h2>
@@ -88,7 +88,7 @@ export function ReportsPanel() {
           </div>
           <div>
             <p className="text-xs text-white/40">Income</p>
-            <p className={cn("text-base sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>{formatCurrency(stats.income, defCur)}</p>
+            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>{formatCurrency(stats.income, defCur)}</p>
             {stats.incomeChange !== 0 && (
               <p className={cn("text-[10px]", stats.incomeChange > 0 ? "text-emerald-400" : "text-rose-400")}>
                 {stats.incomeChange > 0 ? "+" : ""}{stats.incomeChange.toFixed(0)}% vs last month
@@ -102,7 +102,7 @@ export function ReportsPanel() {
           </div>
           <div>
             <p className="text-xs text-white/40">Expenses</p>
-            <p className={cn("text-base sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>{formatCurrency(stats.expenses, defCur)}</p>
+            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>{formatCurrency(stats.expenses, defCur)}</p>
             {stats.expenseChange !== 0 && (
               <p className={cn("text-[10px]", stats.expenseChange < 0 ? "text-emerald-400" : "text-rose-400")}>
                 {stats.expenseChange > 0 ? "+" : ""}{stats.expenseChange.toFixed(0)}% vs last month
@@ -116,7 +116,7 @@ export function ReportsPanel() {
           </div>
           <div>
             <p className="text-xs text-white/40">Net Cash Flow</p>
-            <p className={cn("text-base sm:text-lg font-bold font-mono", net >= 0 ? "text-emerald-400" : "text-rose-400", privacyMode && "privacy-blur")}>
+            <p className={cn("text-sm sm:text-lg font-bold font-mono", net >= 0 ? "text-emerald-400" : "text-rose-400", privacyMode && "privacy-blur")}>
               {net >= 0 ? "+" : ""}{formatCurrency(net, defCur)}
             </p>
           </div>
@@ -127,7 +127,7 @@ export function ReportsPanel() {
           </div>
           <div>
             <p className="text-xs text-white/40">Savings Rate</p>
-            <p className={cn("text-base sm:text-lg font-bold text-white", privacyMode && "privacy-blur")}>{savingsRate}%</p>
+            <p className={cn("text-sm sm:text-lg font-bold text-white", privacyMode && "privacy-blur")}>{savingsRate}%</p>
             <p className="text-[10px] text-white/30">{stats.txCount} transactions</p>
           </div>
         </Card>

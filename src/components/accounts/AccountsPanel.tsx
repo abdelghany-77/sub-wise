@@ -117,50 +117,98 @@ export function AccountsPanel() {
   const netWorthByCurrency = getNetWorthByCurrency();
   const currencies = Object.keys(netWorthByCurrency);
 
+  // Calculate separate savings totals
+  const savingsAccounts = accounts.filter((a) => a.type === "savings");
+  const savingsByCurrency: Record<string, number> = {};
+  for (const acc of savingsAccounts) {
+    savingsByCurrency[acc.currency] = (savingsByCurrency[acc.currency] ?? 0) + acc.balance;
+  }
+  const savingsCurrencies = Object.keys(savingsByCurrency);
+
   return (
     <div className="space-y-6">
-      {/* Net Worth Banner */}
-      <Card className="relative overflow-hidden bg-gradient-to-br from-blue-900/30 via-blue-800/20 to-transparent border-blue-500/20">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.15),transparent_70%)]" />
-        <div className="relative">
-          <p className="stat-label text-blue-300/60">Total Net Worth</p>
-          {currencies.length === 0 ? (
-            <p
-              className={cn(
-                `mt-2 text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-brand`,
-                privacyMode && "privacy-blur",
-              )}
-            >
-              {formatCurrency(0)}
+      {/* Net Worth + Savings Banner */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Net Worth */}
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-900/30 via-blue-800/20 to-transparent border-blue-500/20">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.15),transparent_70%)]" />
+          <div className="relative">
+            <p className="stat-label text-blue-300/60">Net Worth</p>
+            <p className="text-[10px] text-white/30 mt-0.5">Excludes savings accounts</p>
+            {currencies.length === 0 ? (
+              <p
+                className={cn(
+                  "mt-2 text-2xl sm:text-3xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-brand",
+                  privacyMode && "privacy-blur",
+                )}
+              >
+                {formatCurrency(0)}
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
+                {currencies.map((cur) => {
+                  const val = netWorthByCurrency[cur];
+                  return (
+                    <p
+                      key={cur}
+                      className={cn(
+                        `text-2xl sm:text-3xl font-bold font-mono tracking-tight transition-all duration-300 ${
+                          val >= 0
+                            ? "text-gradient-brand"
+                            : "text-gradient-expense"
+                        }`,
+                        privacyMode && "privacy-blur",
+                      )}
+                    >
+                      {formatCurrency(val, cur)}
+                    </p>
+                  );
+                })}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-white/40">
+              {accounts.filter((a) => a.type !== "savings").length} active account{accounts.filter((a) => a.type !== "savings").length !== 1 ? "s" : ""}
+              {currencies.length > 1 && ` · ${currencies.length} currencies`}
             </p>
-          ) : (
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-2">
-              {currencies.map((cur) => {
-                const val = netWorthByCurrency[cur];
-                return (
+          </div>
+        </Card>
+
+        {/* Savings */}
+        <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-900/30 via-emerald-800/20 to-transparent border-emerald-500/20">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.15),transparent_70%)]" />
+          <div className="relative">
+            <p className="stat-label text-emerald-300/60">Savings Balance</p>
+            <p className="text-[10px] text-white/30 mt-0.5">Separate from net worth</p>
+            {savingsCurrencies.length === 0 ? (
+              <p
+                className={cn(
+                  "mt-2 text-2xl sm:text-3xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-income",
+                  privacyMode && "privacy-blur",
+                )}
+              >
+                {formatCurrency(0)}
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
+                {savingsCurrencies.map((cur) => (
                   <p
                     key={cur}
                     className={cn(
-                      `text-3xl sm:text-4xl font-bold font-mono tracking-tight transition-all duration-300 ${
-                        val >= 0
-                          ? "text-gradient-brand"
-                          : "text-gradient-expense"
-                      }`,
+                      "text-2xl sm:text-3xl font-bold font-mono tracking-tight transition-all duration-300 text-gradient-income",
                       privacyMode && "privacy-blur",
                     )}
                   >
-                    {formatCurrency(val, cur)}
+                    {formatCurrency(savingsByCurrency[cur], cur)}
                   </p>
-                );
-              })}
-            </div>
-          )}
-          <p className="mt-2 text-sm text-white/40">
-            {accounts.length} account{accounts.length !== 1 ? "s" : ""}
-            {currencies.length > 1 && ` · ${currencies.length} currencies`}
-          </p>
-        </div>
-      </Card>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-white/40">
+              {savingsAccounts.length} savings account{savingsAccounts.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </Card>
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -179,7 +227,7 @@ export function AccountsPanel() {
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {accounts.map((account) => (
             <AccountCard
               key={account.id}

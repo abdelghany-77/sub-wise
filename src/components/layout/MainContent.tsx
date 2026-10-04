@@ -53,7 +53,7 @@ export function MainContent({ page, onChangePage }: Props) {
   const showAddButton = page === "dashboard" || page === "transactions";
 
   return (
-    <main className="flex-1 overflow-y-auto min-h-0 pb-28 sm:pb-12">
+    <main className="flex-1 overflow-y-auto min-h-0 pb-24 lg:pb-8">
       {/* Top Bar */}
       <header className="sticky top-0 z-20 bg-[#080B10]/85 backdrop-blur-md border-b border-white/[0.08] px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -157,7 +157,7 @@ export function MainContent({ page, onChangePage }: Props) {
 
       {/* Mobile-only Floating Action Button (constrained strictly to mobile screens, hidden on desktop) */}
       {showAddButton && !showAddModal && (
-        <div className="fixed bottom-20 right-6 z-40 sm:hidden">
+        <div className="fixed bottom-[5.5rem] right-5 z-40 lg:hidden">
           <button
             onClick={() => setShowAddModal(true)}
             className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 active:from-blue-600 active:to-blue-700 text-white shadow-xl shadow-blue-900/50 flex items-center justify-center transition-all duration-200 active:scale-95 border border-blue-400/30"

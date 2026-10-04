@@ -22,7 +22,7 @@ export function SettingsPanel() {
   const { privacyMode, togglePrivacyMode, settings, updateSettings } = useStore();
 
   return (
-    <div className="space-y-6 w-full max-w-2xl mx-auto lg:mx-0">
+    <div className="space-y-6 w-full max-w-2xl mx-auto pb-20 lg:pb-8">
       <div>
         <h2 className="section-title">Settings</h2>
         <p className="text-sm text-white/40 mt-1">Customize your Walleteer experience</p>

@@ -135,7 +135,7 @@ export function SavingsGoalsPanel() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20 lg:pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="section-title">Savings Goals</h2>
         <Button icon={<Plus size={16} />} onClick={openAdd}>
@@ -145,7 +145,7 @@ export function SavingsGoalsPanel() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Card padding="sm" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
             <Target size={18} className="text-blue-400" />
@@ -200,7 +200,7 @@ export function SavingsGoalsPanel() {
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {savingsGoals.map((g) => {
             const pct =
               g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;

@@ -128,7 +128,7 @@ export function BudgetsPanel() {
     .reduce((s, b) => s + b.limit, 0);
 
   return (
-    <div className="space-y-5 pb-24 sm:pb-8">
+    <div className="space-y-5 pb-20 lg:pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="section-title">Budgets & Monthly Spending Limits</h2>
@@ -143,14 +143,14 @@ export function BudgetsPanel() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Card padding="sm" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
             <Wallet size={18} className="text-blue-400" />
           </div>
           <div className="min-w-0">
             <p className="text-xs text-white/40">Total Budget</p>
-            <p className={cn("text-base sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
+            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
               {formatCurrency(totalBudget, budgets[0]?.currency)}
             </p>
           </div>
@@ -162,7 +162,7 @@ export function BudgetsPanel() {
           </div>
           <div className="min-w-0">
             <p className="text-xs text-white/40">Total Spent</p>
-            <p className={cn("text-base sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
+            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
               {formatCurrency(totalSpent, budgets[0]?.currency)}
             </p>
           </div>
@@ -174,7 +174,7 @@ export function BudgetsPanel() {
           </div>
           <div className="min-w-0">
             <p className="text-xs text-white/40">Over Budget</p>
-            <p className="text-base sm:text-lg font-bold text-white font-mono">{overBudgetCount}</p>
+            <p className="text-sm sm:text-lg font-bold text-white font-mono">{overBudgetCount}</p>
           </div>
         </Card>
       </div>

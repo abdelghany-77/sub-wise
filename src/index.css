@@ -28,13 +28,19 @@
     @apply w-1.5 h-1.5;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-white/5;
+    @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/20 rounded-full;
+    @apply bg-white/15 rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/30;
+    @apply bg-white/25;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
 }
 
@@ -44,7 +50,7 @@
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:bg-[#1a2332] hover:border-white/[0.14];
+    @apply glass-card transition-all duration-300 hover:bg-[#1a2332] hover:border-white/[0.14] hover:shadow-lg hover:shadow-black/20;
   }
 
   .btn-primary {
@@ -174,11 +180,24 @@
       transform: translateY(0);
     }
   }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
   .animate-fade-in {
     animation: fade-in 0.25s ease both;
   }
   .animate-slide-up {
     animation: slide-up 0.25s ease both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.2s ease both;
   }
 
   /* Safe area helpers */

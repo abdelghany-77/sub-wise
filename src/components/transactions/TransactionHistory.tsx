@@ -167,7 +167,7 @@ export function TransactionHistory() {
   const endResult = Math.min(safeCurrentPage * pageSize, filtered.length);
 
   return (
-    <div className="space-y-4 sm:space-y-5 pb-24 sm:pb-8">
+    <div className="space-y-4 sm:space-y-5 pb-20 lg:pb-8">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -321,101 +321,105 @@ export function TransactionHistory() {
               <div
                 key={tx.id}
                 className={cn(
-                  "glass-card-hover group relative flex items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-l-[3px] transition-all duration-200",
+                  "glass-card-hover group relative flex items-start gap-3 p-3 sm:p-4 rounded-xl border-l-[3px] transition-all duration-200",
                   borderTypeClass,
                 )}
               >
                 {/* Category Icon */}
                 <div
-                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm mt-0.5"
                   style={{ backgroundColor: `${catColor}20` }}
                 >
                   <TypeIcon type={tx.type} />
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-white break-words">
-                      {tx.note || tx.category}
-                    </p>
-                    <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{
-                        backgroundColor: `${catColor}20`,
-                        color: catColor,
-                      }}
-                    >
-                      {tx.category}
-                    </span>
-                    {tx.isRecurring && (
-                      <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                        {tx.recurrenceFrequency || "Recurring"}
+                {/* Main Content */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  {/* Top Row: Title + Category badge + Amount */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate max-w-[180px] xs:max-w-[260px] sm:max-w-none">
+                        {tx.note || tx.category}
+                      </p>
+                      <span
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
+                        style={{
+                          backgroundColor: `${catColor}20`,
+                          color: catColor,
+                        }}
+                      >
+                        {tx.category}
                       </span>
-                    )}
+                      {tx.isRecurring && (
+                        <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 flex-shrink-0 whitespace-nowrap">
+                          {tx.recurrenceFrequency || "Recurring"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Amount */}
+                    <p
+                      className={cn(
+                        "text-sm sm:text-base font-bold font-mono whitespace-nowrap flex-shrink-0 text-right ml-1",
+                        tx.type === "income" && "text-emerald-400",
+                        tx.type === "expense" && "text-rose-400",
+                        tx.type === "transfer" && "text-sky-400",
+                        privacyMode && "privacy-blur",
+                      )}
+                    >
+                      {tx.type === "income"
+                        ? "+"
+                        : tx.type === "expense"
+                          ? "-"
+                          : ""}
+                      {formatCurrency(tx.amount, fromAcc?.currency)}
+                    </p>
                   </div>
 
-                  <p className="text-xs text-white/40 min-w-0">
-                    <span className="text-white/60">{fromAcc?.name}</span>
-                    {toAcc && (
-                      <span className="text-sky-400/80"> → {toAcc.name}</span>
-                    )}
-                    {" · "}
-                    <span className="font-mono text-white/40">
-                      {formatDate(tx.date)}
-                    </span>
-                  </p>
-                </div>
+                  {/* Bottom Row: Account Details + Action Buttons */}
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <p className="text-xs text-white/40 truncate min-w-0 flex-1">
+                      <span className="text-white/70 font-medium">{fromAcc?.name}</span>
+                      {toAcc && (
+                        <span className="text-sky-400/90 font-medium"> → {toAcc.name}</span>
+                      )}
+                      <span className="mx-1.5 text-white/20">•</span>
+                      <span className="font-mono text-white/50">
+                        {formatDate(tx.date)}
+                      </span>
+                    </p>
 
-                {/* Amount */}
-                <div className="text-right flex-shrink-0">
-                  <p
-                    className={cn(
-                      "text-sm sm:text-base font-bold font-mono transition-all duration-300",
-                      tx.type === "income" && "text-emerald-400",
-                      tx.type === "expense" && "text-rose-400",
-                      tx.type === "transfer" && "text-sky-400",
-                      privacyMode && "privacy-blur",
-                    )}
-                  >
-                    {tx.type === "income"
-                      ? "+"
-                      : tx.type === "expense"
-                        ? "-"
-                        : ""}
-                    {formatCurrency(tx.amount, fromAcc?.currency)}
-                  </p>
-                </div>
-
-                {/* Inline Hover Action Buttons: Edit, Duplicate, Delete */}
-                <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-                  <button
-                    type="button"
-                    aria-label="Duplicate transaction"
-                    title="Duplicate transaction"
-                    onClick={() => handleDuplicate(tx)}
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-all"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Edit transaction"
-                    title="Edit transaction"
-                    onClick={() => setEditingTx(tx)}
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Delete transaction"
-                    title="Delete transaction"
-                    onClick={() => setConfirmDelete(tx.id)}
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                    {/* Inline Hover Action Buttons */}
+                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        aria-label="Duplicate transaction"
+                        title="Duplicate transaction"
+                        onClick={() => handleDuplicate(tx)}
+                        className="p-1.5 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-all"
+                      >
+                        <Copy size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Edit transaction"
+                        title="Edit transaction"
+                        onClick={() => setEditingTx(tx)}
+                        className="p-1.5 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete transaction"
+                        title="Delete transaction"
+                        onClick={() => setConfirmDelete(tx.id)}
+                        className="p-1.5 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
