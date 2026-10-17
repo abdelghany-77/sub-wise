@@ -8,7 +8,6 @@ import {
   Target,
   BarChart3,
   Settings,
-  Database,
   Plus,
   Eye,
   EyeOff,
@@ -83,13 +82,13 @@ export function CommandPalette({
   const navItems: CommandItem[] = useMemo(
     () => [
       { id: "nav-dash", title: "Go to Dashboard", subtitle: "Overview of wealth & metrics", icon: <LayoutDashboard size={16} />, action: () => onNavigate("dashboard"), category: "Navigation" },
-      { id: "nav-acc", title: "Go to Accounts", subtitle: `View ${accounts.length} linked accounts`, icon: <CreditCard size={16} />, action: () => onNavigate("accounts"), category: "Navigation" },
-      { id: "nav-tx", title: "Go to Transactions", subtitle: `View ${transactions.length} transaction records`, icon: <ArrowLeftRight size={16} />, action: () => onNavigate("transactions"), category: "Navigation" },
+      { id: "nav-acc", title: "Go to Accounts", subtitle: `View ${accounts.length} linked accounts & vault`, icon: <CreditCard size={16} />, action: () => onNavigate("accounts"), category: "Navigation" },
+      { id: "nav-tx", title: "Go to Transactions", subtitle: `View ${transactions.length} ledger records`, icon: <ArrowLeftRight size={16} />, action: () => onNavigate("transactions"), category: "Navigation" },
+      { id: "nav-comm", title: "Go to Bills & IOUs", subtitle: "Subscriptions, recurring bills & lent/borrowed debts", icon: <LayoutDashboard size={16} />, action: () => onNavigate("commitments"), category: "Navigation" },
       { id: "nav-bud", title: "Go to Budgets", subtitle: "Monthly spending limits", icon: <PieChart size={16} />, action: () => onNavigate("budgets"), category: "Navigation" },
       { id: "nav-goal", title: "Go to Savings Goals", subtitle: "Track progress towards targets", icon: <Target size={16} />, action: () => onNavigate("goals"), category: "Navigation" },
       { id: "nav-rep", title: "Go to Reports", subtitle: "Income vs expense analysis", icon: <BarChart3 size={16} />, action: () => onNavigate("reports"), category: "Navigation" },
-      { id: "nav-set", title: "Go to Settings", subtitle: "Preferences & currency configuration", icon: <Settings size={16} />, action: () => onNavigate("settings"), category: "Navigation" },
-      { id: "nav-data", title: "Go to Data & Backup", subtitle: "Export / import JSON backups", icon: <Database size={16} />, action: () => onNavigate("data"), category: "Navigation" },
+      { id: "nav-set", title: "Go to Settings & Backup", subtitle: "Budget target, data backup & preferences", icon: <Settings size={16} />, action: () => onNavigate("settings"), category: "Navigation" },
     ],
     [onNavigate, accounts.length, transactions.length],
   );

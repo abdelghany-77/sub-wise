@@ -8,6 +8,9 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Check,
+  ChevronDown,
+  ChevronUp,
+  Coins,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -169,6 +172,7 @@ export function AccountsPanel() {
   // Live rates edit modal
   const [showRatesModal, setShowRatesModal] = useState(false);
   const [tempRates, setTempRates] = useState(exchangeRates);
+  const [ratesExpanded, setRatesExpanded] = useState(false);
 
   const breakdown = getNetWorthBreakdown();
 
@@ -367,6 +371,76 @@ export function AccountsPanel() {
         </Card>
       </div>
 
+      {/* Collapsible / Sleek Exchange Rates & Bullion Bar */}
+      <div className="rounded-2xl bg-[#0F1420]/80 border border-white/[0.08] backdrop-blur-xl overflow-hidden transition-all shadow-lg">
+        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setRatesExpanded(!ratesExpanded)}
+            className="flex items-center gap-2.5 text-left flex-1 min-w-0 group"
+            aria-expanded={ratesExpanded}
+          >
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+              <Coins size={16} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
+                  Live FX & Gold Bullion Rates
+                </span>
+                <span className="hidden sm:inline-flex px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                  5 Rates
+                </span>
+              </div>
+              <p className="text-[11px] text-white/40 truncate">
+                USD: {exchangeRates.USD} EGP • EUR: {exchangeRates.EUR} EGP • 24K: {exchangeRates.GOLD_24K} EGP/g
+              </p>
+            </div>
+            <span className="text-white/40 group-hover:text-white transition-colors ml-auto pr-1">
+              {ratesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTempRates(exchangeRates);
+              setShowRatesModal(true);
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white/70 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors flex-shrink-0"
+          >
+            <Edit2 size={12} />
+            <span>Edit Rates</span>
+          </button>
+        </div>
+
+        {/* Expanded Rate Chips */}
+        {ratesExpanded && (
+          <div className="px-3.5 sm:px-4 pb-4 pt-1 grid grid-cols-2 sm:grid-cols-5 gap-2.5 border-t border-white/[0.06] animate-fade-in">
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-[10px] text-white/40 uppercase block">USD / EGP</span>
+              <span className="text-sm font-bold font-mono text-white">{exchangeRates.USD} EGP</span>
+            </div>
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-[10px] text-white/40 uppercase block">EUR / EGP</span>
+              <span className="text-sm font-bold font-mono text-white">{exchangeRates.EUR} EGP</span>
+            </div>
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-[10px] text-white/40 uppercase block">SAR / EGP</span>
+              <span className="text-sm font-bold font-mono text-white">{exchangeRates.SAR} EGP</span>
+            </div>
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-[10px] text-amber-400/80 uppercase block">Gold 24K</span>
+              <span className="text-sm font-bold font-mono text-amber-300">{exchangeRates.GOLD_24K} EGP/g</span>
+            </div>
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-[10px] text-amber-400/80 uppercase block">Gold 21K</span>
+              <span className="text-sm font-bold font-mono text-amber-300">{exchangeRates.GOLD_21K} EGP/g</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Header and Add Button */}
       <div className="flex items-center justify-between">
         <div>
@@ -419,33 +493,38 @@ export function AccountsPanel() {
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.22),transparent_60%)] pointer-events-none" />
                 <div className="absolute -bottom-10 -right-10 w-44 h-44 rounded-full bg-white/[0.03] pointer-events-none blur-xl" />
 
-                {/* Top Card Row: EMV Chip, Contactless Symbol & Quick Actions */}
+                {/* Top Card Row: EMV Chip, Contactless Symbol & Clean Unified Action Bar */}
                 <div className="relative z-10 flex items-start justify-between">
                   <ContactlessChip chipColor={theme.chipColor} />
 
-                  <div className="flex items-center gap-1.5 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Adjust Balance Action Button */}
+                  {/* Clean Unified Top-Right Glass Action Bar */}
+                  <div className="flex items-center bg-black/40 backdrop-blur-md rounded-xl p-1 border border-white/15 shadow-sm opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
+                      type="button"
                       onClick={() => openReconcile(account)}
-                      className="px-2.5 py-1 rounded-xl bg-black/40 hover:bg-black/60 text-white/80 hover:text-white border border-white/20 text-[11px] font-semibold flex items-center gap-1 transition-all backdrop-blur-sm"
-                      title="Adjust actual real balance"
+                      className="p-1.5 rounded-lg hover:bg-white/15 text-white/75 hover:text-white transition-colors"
+                      title="Adjust / Reconcile real balance"
+                      aria-label="Reconcile balance"
                     >
-                      <Scale size={12} />
-                      <span>Adjust</span>
+                      <Scale size={13} />
                     </button>
-
+                    <div className="w-[1px] h-3 bg-white/15 my-auto mx-0.5" />
                     <button
+                      type="button"
                       onClick={() => openEdit(account)}
-                      className="p-1.5 rounded-xl bg-black/30 hover:bg-black/50 text-white/70 hover:text-white border border-white/10 transition-colors"
-                      title="Edit Account Details"
+                      className="p-1.5 rounded-lg hover:bg-white/15 text-white/75 hover:text-white transition-colors"
+                      title="Edit account details"
+                      aria-label="Edit account"
                     >
                       <Edit2 size={13} />
                     </button>
-
+                    <div className="w-[1px] h-3 bg-white/15 my-auto mx-0.5" />
                     <button
+                      type="button"
                       onClick={() => setConfirmDelete(account.id)}
-                      className="p-1.5 rounded-xl bg-black/30 hover:bg-rose-900/50 text-white/70 hover:text-rose-300 border border-white/10 transition-colors"
-                      title="Delete Account"
+                      className="p-1.5 rounded-lg hover:bg-rose-500/25 text-white/75 hover:text-rose-300 transition-colors"
+                      title="Delete account"
+                      aria-label="Delete account"
                     >
                       <Trash2 size={13} />
                     </button>

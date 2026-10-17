@@ -286,6 +286,7 @@ export interface RecurringBill {
   category: string;
   icon?: string;
   createdAt: string;
+  status?: "active" | "paused";
 }
 
 export type IouType = "lent" | "borrowed";

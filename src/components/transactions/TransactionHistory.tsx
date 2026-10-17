@@ -381,129 +381,234 @@ export function TransactionHistory() {
           </button>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {paginated.map((tx) => {
-            const fromAcc = getAccountById(tx.accountId);
-            const toAcc = tx.toAccountId
-              ? getAccountById(tx.toAccountId)
-              : undefined;
-            const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
+        <>
+          {/* Mobile Clean Stacked Cards (< md) */}
+          <div className="block md:hidden space-y-2.5">
+            {paginated.map((tx) => {
+              const fromAcc = getAccountById(tx.accountId);
+              const toAcc = tx.toAccountId
+                ? getAccountById(tx.toAccountId)
+                : undefined;
+              const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
 
-            const borderTypeClass =
-              tx.type === "income"
-                ? "border-l-emerald-500"
-                : tx.type === "expense"
-                  ? "border-l-rose-500"
-                  : "border-l-sky-500";
+              const borderTypeClass =
+                tx.type === "income"
+                  ? "border-l-emerald-500"
+                  : tx.type === "expense"
+                    ? "border-l-rose-500"
+                    : "border-l-sky-500";
 
-            return (
-              <div
-                key={tx.id}
-                className={cn(
-                  "glass-card-hover group relative flex items-start gap-3 p-3 sm:p-4 rounded-xl border-l-[3px] transition-all duration-200",
-                  borderTypeClass,
-                )}
-              >
-                {/* Category Icon */}
+              return (
                 <div
-                  className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm mt-0.5"
-                  style={{ backgroundColor: `${catColor}20` }}
+                  key={tx.id}
+                  className={cn(
+                    "glass-card p-3.5 rounded-xl border-l-[3px] transition-all duration-200 flex flex-col gap-2.5",
+                    borderTypeClass,
+                  )}
                 >
-                  <TypeIcon type={tx.type} />
-                </div>
-
-                {/* Main Content */}
-                <div className="flex-1 min-w-0 space-y-1">
-                  {/* Top Row: Title + Category badge + Amount */}
+                  {/* Top Row: Icon + Title + Category + Amount */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white truncate max-w-[180px] xs:max-w-[260px] sm:max-w-none">
-                        {tx.note || tx.category}
-                      </p>
-                      <span
-                        className="text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
-                        style={{
-                          backgroundColor: `${catColor}20`,
-                          color: catColor,
-                        }}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div
+                        className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center shadow-sm"
+                        style={{ backgroundColor: `${catColor}20` }}
                       >
-                        {tx.category}
-                      </span>
-                      {tx.isRecurring && (
-                        <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 flex-shrink-0 whitespace-nowrap">
-                          {tx.recurrenceFrequency || "Recurring"}
+                        <TypeIcon type={tx.type} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white truncate max-w-[170px]">
+                          {tx.note || tx.category}
+                        </p>
+                        <span
+                          className="text-[9px] font-medium px-1.5 py-0.2 rounded-full"
+                          style={{
+                            backgroundColor: `${catColor}20`,
+                            color: catColor,
+                          }}
+                        >
+                          {tx.category}
                         </span>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Amount */}
                     <p
                       className={cn(
-                        "text-sm sm:text-base font-bold font-mono whitespace-nowrap flex-shrink-0 text-right ml-1",
+                        "text-sm font-bold font-mono whitespace-nowrap text-right",
                         tx.type === "income" && "text-emerald-400",
                         tx.type === "expense" && "text-rose-400",
                         tx.type === "transfer" && "text-sky-400",
                         privacyMode && "privacy-blur",
                       )}
                     >
-                      {tx.type === "income"
-                        ? "+"
-                        : tx.type === "expense"
-                          ? "-"
-                          : ""}
-                      {formatCurrency(tx.amount, fromAcc?.currency)}
+                      {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
+                      {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
                     </p>
                   </div>
 
-                  {/* Bottom Row: Account Details + Action Buttons */}
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <p className="text-xs text-white/40 truncate min-w-0 flex-1">
-                      <span className="text-white/70 font-medium">{fromAcc?.name}</span>
-                      {toAcc && (
-                        <span className="text-sky-400/90 font-medium"> → {toAcc.name}</span>
-                      )}
-                      <span className="mx-1.5 text-white/20">•</span>
-                      <span className="font-mono text-white/50">
-                        {formatDate(tx.date)}
-                      </span>
-                    </p>
+                  {/* Bottom Row: Account Details + Date + Actions */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
+                    <div className="text-[11px] text-white/50 truncate min-w-0">
+                      <span>{fromAcc?.name}</span>
+                      {toAcc && <span className="text-sky-400"> → {toAcc.name}</span>}
+                      <span className="mx-1 text-white/20">•</span>
+                      <span className="font-mono">{formatDate(tx.date)}</span>
+                    </div>
 
-                    {/* Inline Hover Action Buttons */}
-                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         type="button"
                         aria-label="Duplicate transaction"
-                        title="Duplicate transaction"
                         onClick={() => handleDuplicate(tx)}
-                        className="p-1.5 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-all"
+                        className="p-1 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
                       >
                         <Copy size={13} />
                       </button>
                       <button
                         type="button"
                         aria-label="Edit transaction"
-                        title="Edit transaction"
                         onClick={() => setEditingTx(tx)}
-                        className="p-1.5 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                        className="p-1 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                       >
                         <Pencil size={13} />
                       </button>
                       <button
                         type="button"
                         aria-label="Delete transaction"
-                        title="Delete transaction"
                         onClick={() => setConfirmDelete(tx.id)}
-                        className="p-1.5 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                        className="p-1 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Full Ledger Table (md:) */}
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0E131E]/60 backdrop-blur-xl shadow-xl">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/[0.08] bg-white/[0.02] text-white/40 font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Description</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Account</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {paginated.map((tx) => {
+                  const fromAcc = getAccountById(tx.accountId);
+                  const toAcc = tx.toAccountId
+                    ? getAccountById(tx.toAccountId)
+                    : undefined;
+                  const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
+
+                  return (
+                    <tr
+                      key={tx.id}
+                      className="hover:bg-white/[0.02] transition-colors group"
+                    >
+                      <td className="py-3 px-4 font-mono text-white/50 whitespace-nowrap">
+                        {formatDate(tx.date)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${catColor}20` }}
+                          >
+                            <TypeIcon type={tx.type} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-white truncate max-w-xs">
+                              {tx.note || tx.category}
+                            </p>
+                            {tx.isRecurring && (
+                              <span className="text-[9px] uppercase tracking-wider font-semibold text-blue-400">
+                                Recurring ({tx.recurrenceFrequency || "active"})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${catColor}20`,
+                            color: catColor,
+                          }}
+                        >
+                          {tx.category}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-white/70">
+                          <span>{fromAcc?.name || "Account"}</span>
+                          {toAcc && (
+                            <span className="text-sky-400">→ {toAcc.name}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold whitespace-nowrap">
+                        <span
+                          className={cn(
+                            tx.type === "income" && "text-emerald-400",
+                            tx.type === "expense" && "text-rose-400",
+                            tx.type === "transfer" && "text-sky-400",
+                            privacyMode && "privacy-blur",
+                          )}
+                        >
+                          {tx.type === "income"
+                            ? "+"
+                            : tx.type === "expense"
+                              ? "-"
+                              : ""}
+                          {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            aria-label="Duplicate transaction"
+                            title="Duplicate transaction"
+                            onClick={() => handleDuplicate(tx)}
+                            className="p-1.5 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+                          >
+                            <Copy size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Edit transaction"
+                            title="Edit transaction"
+                            onClick={() => setEditingTx(tx)}
+                            className="p-1.5 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Delete transaction"
+                            title="Delete transaction"
+                            onClick={() => setConfirmDelete(tx.id)}
+                            className="p-1.5 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Redesigned Table Pagination */}

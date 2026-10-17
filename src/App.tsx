@@ -11,6 +11,7 @@ const VALID_PAGES: Page[] = [
   "dashboard",
   "accounts",
   "transactions",
+  "commitments",
   "subscriptions",
   "ious",
   "budgets",

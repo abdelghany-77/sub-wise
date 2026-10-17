@@ -1,21 +1,13 @@
 import { useState, useEffect } from "react";
-import { Coins, Eye, EyeOff, Plus, Settings, Database, Search, Command } from "lucide-react";
-import { DashboardStats } from "../dashboard/DashboardStats";
-import { SafeToSpendWidget } from "../dashboard/SafeToSpendWidget";
-import { UpcomingBillsWidget } from "../dashboard/UpcomingBillsWidget";
-import { RecentTransactions } from "../dashboard/RecentTransactions";
-import { SpendingDonut } from "../charts/SpendingDonut";
-import { BalanceTrendChart } from "../charts/BalanceTrendChart";
-import { IncomeExpenseChart } from "../charts/IncomeExpenseChart";
-import { TransactionHistory } from "../transactions/TransactionHistory";
+import { Coins, Eye, EyeOff, Plus, Settings, Search, Command } from "lucide-react";
+import { DashboardBentoView } from "../dashboard/DashboardBentoView";
 import { AccountsPanel } from "../accounts/AccountsPanel";
-import { SubscriptionsPanel } from "../subscriptions/SubscriptionsPanel";
-import { IousPanel } from "../ious/IousPanel";
+import { TransactionHistory } from "../transactions/TransactionHistory";
+import { CommitmentsPanel } from "../commitments/CommitmentsPanel";
 import { BudgetsPanel } from "../budgets/BudgetsPanel";
 import { SavingsGoalsPanel } from "../goals/SavingsGoalsPanel";
 import { ReportsPanel } from "../reports/ReportsPanel";
 import { SettingsPanel } from "../settings/SettingsPanel";
-import { DataManager } from "../data/DataManager";
 import { CommandPalette } from "../ui/CommandPalette";
 import type { Page } from "./Sidebar";
 import { useStore } from "../../store/useStore";
@@ -29,14 +21,15 @@ interface Props {
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: "Personal CFO Dashboard",
   accounts: "Accounts & Asset Vault",
-  transactions: "Transactions & Ledger",
-  subscriptions: "Bills & Subscriptions",
+  transactions: "Transactions Ledger",
+  commitments: "Bills & IOUs",
+  subscriptions: "Subscriptions & Recurring Bills",
   ious: "IOUs: Lent & Borrowed",
   budgets: "Category Budgets",
   goals: "Savings Goals",
   reports: "Analytics & Reports",
-  settings: "Settings",
-  data: "Data & Cloud Backup",
+  settings: "Settings & Backup",
+  data: "Settings & Backup",
 };
 
 export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
@@ -70,7 +63,7 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
           </div>
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white truncate tracking-tight">
-              {PAGE_TITLES[page]}
+              {PAGE_TITLES[page] || "Walleteer"}
             </h1>
           </div>
         </div>
@@ -99,32 +92,21 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
             <span>Add Transaction</span>
           </button>
 
-          {/* Mobile quick access to Settings & Data */}
+          {/* Mobile quick access to Settings & Backup */}
           <div className="md:hidden flex items-center gap-1">
             <button
-              onClick={() => onChangePage("data")}
-              aria-label="Data & Backup"
+              onClick={() => onChangePage("settings")}
+              aria-label="Settings & Backup"
               className={`p-2 rounded-xl transition-all duration-200 relative ${
-                page === "data"
+                page === "settings" || page === "data"
                   ? "bg-blue-500/20 text-blue-400"
                   : "text-white/40 hover:text-white hover:bg-white/10"
               }`}
             >
-              <Database size={17} />
+              <Settings size={18} />
               {backupAlert && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0B0F17]" />
               )}
-            </button>
-            <button
-              onClick={() => onChangePage("settings")}
-              aria-label="Settings"
-              className={`p-2 rounded-xl transition-all duration-200 ${
-                page === "settings"
-                  ? "bg-blue-500/20 text-blue-400"
-                  : "text-white/40 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <Settings size={17} />
             </button>
           </div>
 
@@ -145,41 +127,18 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
         </div>
       </header>
 
-      {/* Main Page Content */}
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
-        {page === "dashboard" && (
-          <>
-            {/* Safe-to-Spend Daily Allowance Hero Widget */}
-            <SafeToSpendWidget />
-
-            {/* Upcoming Bills Alert Card (Next 7 Days) */}
-            <UpcomingBillsWidget onViewAll={() => onChangePage("subscriptions")} />
-
-            {/* Dashboard Overview KPI Stats */}
-            <DashboardStats />
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-              <SpendingDonut />
-              <BalanceTrendChart />
-            </div>
-
-            <IncomeExpenseChart />
-
-            {/* Recent Activity (Clean 5 latest transactions without pagination/filter bloat) */}
-            <RecentTransactions onViewAll={() => onChangePage("transactions")} />
-          </>
-        )}
-
+      {/* Main Page Content - Standardized Breathing Room */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-28 md:pb-10 animate-fade-in">
+        {page === "dashboard" && <DashboardBentoView onNavigate={onChangePage} />}
         {page === "accounts" && <AccountsPanel />}
         {page === "transactions" && <TransactionHistory />}
-        {page === "subscriptions" && <SubscriptionsPanel />}
-        {page === "ious" && <IousPanel />}
+        {page === "commitments" && <CommitmentsPanel />}
+        {page === "subscriptions" && <CommitmentsPanel initialTab="subscriptions" />}
+        {page === "ious" && <CommitmentsPanel initialTab="ious" />}
         {page === "budgets" && <BudgetsPanel />}
         {page === "goals" && <SavingsGoalsPanel />}
         {page === "reports" && <ReportsPanel />}
-        {page === "settings" && <SettingsPanel />}
-        {page === "data" && <DataManager />}
+        {(page === "settings" || page === "data") && <SettingsPanel />}
       </div>
 
       {/* Command Palette */}

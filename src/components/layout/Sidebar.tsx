@@ -3,14 +3,9 @@ import {
   LayoutDashboard,
   CreditCard,
   ArrowLeftRight,
-  Database,
-  Coins,
-  PieChart,
-  Target,
-  BarChart3,
-  Settings,
   CalendarClock,
-  Users2,
+  Settings,
+  Coins,
   Plus,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -20,6 +15,7 @@ export type Page =
   | "dashboard"
   | "accounts"
   | "transactions"
+  | "commitments"
   | "subscriptions"
   | "ious"
   | "budgets"
@@ -34,41 +30,57 @@ interface Props {
   onOpenQuickAdd: () => void;
 }
 
-const NAV_ITEMS: { page: Page; label: string; icon: React.ReactNode }[] = [
-  { page: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={19} /> },
-  { page: "accounts", label: "Accounts & Vault", icon: <CreditCard size={19} /> },
-  { page: "transactions", label: "Transactions", icon: <ArrowLeftRight size={19} /> },
-  { page: "subscriptions", label: "Bills & Subs", icon: <CalendarClock size={19} /> },
-  { page: "ious", label: "Lent & Borrowed", icon: <Users2 size={19} /> },
-  { page: "budgets", label: "Budgets", icon: <PieChart size={19} /> },
-  { page: "goals", label: "Savings Goals", icon: <Target size={19} /> },
-  { page: "reports", label: "Analytics & Reports", icon: <BarChart3 size={19} /> },
-  { page: "settings", label: "Settings", icon: <Settings size={19} /> },
-  { page: "data", label: "Data & Backup", icon: <Database size={19} /> },
+const PRIMARY_NAV: {
+  page: Page;
+  activeMatch: Page[];
+  label: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    page: "dashboard",
+    activeMatch: ["dashboard"],
+    label: "Dashboard",
+    icon: <LayoutDashboard size={19} />,
+  },
+  {
+    page: "accounts",
+    activeMatch: ["accounts"],
+    label: "Accounts & Vault",
+    icon: <CreditCard size={19} />,
+  },
+  {
+    page: "transactions",
+    activeMatch: ["transactions"],
+    label: "Transactions",
+    icon: <ArrowLeftRight size={19} />,
+  },
+  {
+    page: "commitments",
+    activeMatch: ["commitments", "subscriptions", "ious"],
+    label: "Bills & IOUs",
+    icon: <CalendarClock size={19} />,
+  },
+  {
+    page: "settings",
+    activeMatch: ["settings", "data"],
+    label: "Settings & Backup",
+    icon: <Settings size={19} />,
+  },
 ];
 
 export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
-  const { budgets, transactions, isBackupNeeded, recurring, ious } = useStore();
-
-  // Over-budget alert badge
-  const overBudgetCount = useMemo(() => {
-    const now = new Date();
-    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const spending: Record<string, number> = {};
-    transactions
-      .filter((tx) => tx.type === "expense" && tx.date.startsWith(prefix) && !tx.isIou)
-      .forEach((tx) => {
-        spending[tx.category] = (spending[tx.category] ?? 0) + tx.amount;
-      });
-    return budgets.filter((b) => (spending[b.category] ?? 0) > b.limit).length;
-  }, [budgets, transactions]);
+  const { isBackupNeeded, recurring, ious } = useStore();
 
   // Upcoming bills count in next 7 days
   const upcomingBillsCount = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const in7Days = new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0];
     return recurring.filter(
-      (r) => r.type === "expense" && r.nextDueDate >= today && r.nextDueDate <= in7Days,
+      (r) =>
+        r.type === "expense" &&
+        r.status !== "paused" &&
+        r.nextDueDate >= today &&
+        r.nextDueDate <= in7Days,
     ).length;
   }, [recurring]);
 
@@ -77,6 +89,7 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
     return ious.filter((i) => i.status === "pending").length;
   }, [ious]);
 
+  const totalCommitmentAlerts = upcomingBillsCount + pendingIousCount;
   const backupNeeded = isBackupNeeded();
 
   return (
@@ -119,50 +132,45 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
 
         {/* Navigation Links */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ page, label, icon }) => (
-            <button
-              key={page}
-              onClick={() => onChange(page)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 group relative",
-                current === page &&
-                  "bg-gradient-to-r from-blue-600/20 to-indigo-600/10 text-white border border-blue-500/30 shadow-sm shadow-blue-500/10",
-              )}
-            >
-              <span
+          {PRIMARY_NAV.map(({ page, activeMatch, label, icon }) => {
+            const isActive = activeMatch.includes(current);
+
+            return (
+              <button
+                key={page}
+                onClick={() => onChange(page)}
                 className={cn(
-                  "text-white/50 group-hover:text-blue-400 transition-colors",
-                  current === page && "text-blue-400",
+                  "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 group relative",
+                  isActive &&
+                    "bg-gradient-to-r from-blue-600/20 to-indigo-600/10 text-white border border-blue-500/30 shadow-sm shadow-blue-500/10 font-semibold",
                 )}
               >
-                {icon}
-              </span>
-              <span className="font-medium tracking-wide">{label}</span>
-
-              {/* Badges */}
-              {page === "budgets" && overBudgetCount > 0 && (
-                <span className="ml-auto bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center animate-pulse">
-                  {overBudgetCount}
-                </span>
-              )}
-              {page === "subscriptions" && upcomingBillsCount > 0 && (
-                <span className="ml-auto bg-amber-500/90 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center">
-                  {upcomingBillsCount}
-                </span>
-              )}
-              {page === "ious" && pendingIousCount > 0 && (
-                <span className="ml-auto bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center">
-                  {pendingIousCount}
-                </span>
-              )}
-              {page === "data" && backupNeeded && (
                 <span
-                  title="Backup recommended (7+ days or 15+ new transactions)"
-                  className="ml-auto w-2.5 h-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20"
-                />
-              )}
-            </button>
-          ))}
+                  className={cn(
+                    "text-white/50 group-hover:text-blue-400 transition-colors",
+                    isActive && "text-blue-400",
+                  )}
+                >
+                  {icon}
+                </span>
+                <span className="tracking-wide">{label}</span>
+
+                {/* Badges */}
+                {page === "commitments" && totalCommitmentAlerts > 0 && (
+                  <span className="ml-auto bg-amber-500/90 text-black text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center justify-center">
+                    {totalCommitmentAlerts}
+                  </span>
+                )}
+
+                {page === "settings" && backupNeeded && (
+                  <span
+                    title="Backup recommended"
+                    className="ml-auto w-2.5 h-2.5 rounded-full bg-amber-400 ring-4 ring-amber-400/20"
+                  />
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Footer info */}
@@ -176,7 +184,7 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
       </aside>
 
       {/* Mobile Glassmorphic Bottom Navigation Bar (< md) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0B0F17]/85 backdrop-blur-xl border-t border-white/[0.08] pb-safe">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0B0F17]/90 backdrop-blur-xl border-t border-white/[0.08] pb-safe">
         <div className="relative flex items-center justify-around px-2 py-1.5">
           {/* Tab 1: Dashboard */}
           <button
@@ -247,26 +255,28 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
             <span>History</span>
           </button>
 
-          {/* Tab 4: Subscriptions / Insights */}
+          {/* Tab 4: Commitments (Bills & IOUs) */}
           <button
-            onClick={() => onChange("subscriptions")}
+            onClick={() => onChange("commitments")}
             className={cn(
               "flex flex-col items-center justify-center flex-1 py-1 text-[10px] font-medium transition-all duration-200 relative",
-              current === "subscriptions" ? "text-blue-400 font-semibold" : "text-white/45 hover:text-white/70",
+              ["commitments", "subscriptions", "ious"].includes(current)
+                ? "text-blue-400 font-semibold"
+                : "text-white/45 hover:text-white/70",
             )}
           >
             <span
               className={cn(
                 "p-1.5 rounded-xl transition-all relative",
-                current === "subscriptions" ? "bg-blue-500/20" : "",
+                ["commitments", "subscriptions", "ious"].includes(current) ? "bg-blue-500/20" : "",
               )}
             >
               <CalendarClock size={20} />
-              {upcomingBillsCount > 0 && (
+              {totalCommitmentAlerts > 0 && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full ring-2 ring-[#0B0F17]" />
               )}
             </span>
-            <span>Subs & Bills</span>
+            <span>Bills & IOUs</span>
           </button>
         </div>
       </nav>

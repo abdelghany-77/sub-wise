@@ -53,6 +53,7 @@ export const INITIAL_RECURRING: RecurringBill[] = [
     accountId: "acc-1",
     type: "expense",
     category: "Utilities",
+    status: "active",
     createdAt: new Date().toISOString(),
   },
   {
@@ -64,6 +65,7 @@ export const INITIAL_RECURRING: RecurringBill[] = [
     accountId: "acc-1",
     type: "expense",
     category: "Personal Care",
+    status: "active",
     createdAt: new Date().toISOString(),
   },
   {
@@ -75,6 +77,7 @@ export const INITIAL_RECURRING: RecurringBill[] = [
     accountId: "acc-1",
     type: "expense",
     category: "Subscriptions",
+    status: "active",
     createdAt: new Date().toISOString(),
   },
 ];
@@ -153,8 +156,11 @@ interface WealthState {
 
   // Recurring & Subscriptions
   addRecurringBill: (bill: Omit<RecurringBill, "id" | "createdAt">) => void;
+  updateRecurring: (id: string, updates: Partial<RecurringBill>) => void;
   updateRecurringBill: (id: string, updates: Partial<RecurringBill>) => void;
+  toggleRecurringStatus: (id: string) => void;
   deleteRecurringBill: (id: string) => void;
+  deleteRecurring: (id: string) => void;
   markBillAsPaid: (id: string, customDate?: string) => void;
 
   // IOUs (Lent / Borrowed)
@@ -576,6 +582,7 @@ export const useStore = create<WealthState>()(
         const newBill: RecurringBill = {
           ...bill,
           id: generateId(),
+          status: bill.status || "active",
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ recurring: [...s.recurring, newBill] }));
@@ -585,18 +592,50 @@ export const useStore = create<WealthState>()(
         });
       },
 
-      updateRecurringBill: (id, updates) => {
+      updateRecurring: (id, updates) => {
         set((s) => ({
           recurring: s.recurring.map((r) =>
             r.id === id ? { ...r, ...updates } : r,
           ),
         }));
+        useToastStore.getState().addToast({
+          type: "info",
+          message: `Recurring commitment updated`,
+        });
+      },
+
+      updateRecurringBill: (id, updates) => {
+        get().updateRecurring(id, updates);
+      },
+
+      toggleRecurringStatus: (id) => {
+        const bill = get().recurring.find((r) => r.id === id);
+        if (!bill) return;
+        const currentStatus = bill.status ?? "active";
+        const nextStatus = currentStatus === "active" ? "paused" : "active";
+        set((s) => ({
+          recurring: s.recurring.map((r) =>
+            r.id === id ? { ...r, status: nextStatus } : r,
+          ),
+        }));
+        useToastStore.getState().addToast({
+          type: "info",
+          message: `"${bill.name}" is now ${nextStatus === "active" ? "Active" : "Paused"}`,
+        });
       },
 
       deleteRecurringBill: (id) => {
         set((s) => ({
           recurring: s.recurring.filter((r) => r.id !== id),
         }));
+        useToastStore.getState().addToast({
+          type: "info",
+          message: "Commitment deleted",
+        });
+      },
+
+      deleteRecurring: (id) => {
+        get().deleteRecurringBill(id);
       },
 
       markBillAsPaid: (id, customDate) => {
@@ -823,6 +862,7 @@ export const useStore = create<WealthState>()(
           .filter(
             (r) =>
               r.type === "expense" &&
+              r.status !== "paused" &&
               r.nextDueDate >= todayStr &&
               r.nextDueDate <= endOfMonthStr,
           )
