@@ -7,8 +7,6 @@ import {
   Scale,
   ArrowUpRight,
   ArrowDownLeft,
-  Coins,
-  RefreshCw,
   Check,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
@@ -17,7 +15,12 @@ import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { Input, Select } from "../ui/FormFields";
 import { formatCurrency, cn } from "../../lib/utils";
-import type { Account, AccountType, AssetType, CardBrandTheme } from "../../types";
+import type {
+  Account,
+  AccountType,
+  AssetType,
+  CardBrandTheme,
+} from "../../types";
 import {
   ACCOUNT_TYPE_LABELS,
   ASSET_TYPE_LABELS,
@@ -27,20 +30,87 @@ import {
 function ContactlessChip({ chipColor = "#F59E0B" }: { chipColor?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <svg width="34" height="24" viewBox="0 0 34 24" fill="none" className="drop-shadow">
-        <rect width="34" height="24" rx="4" fill={chipColor} fillOpacity="0.9" />
-        <rect x="1" y="1" width="32" height="22" rx="3" stroke="#000" strokeOpacity="0.25" strokeWidth="0.8" />
-        <path d="M0 8H13V16H0" stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
-        <path d="M21 8H34V16H21" stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
-        <path d="M13 12H21" stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
-        <path d="M13 0V24" stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
-        <path d="M21 0V24" stroke="#000" strokeOpacity="0.3" strokeWidth="0.8" />
+      <svg
+        width="34"
+        height="24"
+        viewBox="0 0 34 24"
+        fill="none"
+        className="drop-shadow"
+      >
+        <rect
+          width="34"
+          height="24"
+          rx="4"
+          fill={chipColor}
+          fillOpacity="0.9"
+        />
+        <rect
+          x="1"
+          y="1"
+          width="32"
+          height="22"
+          rx="3"
+          stroke="#000"
+          strokeOpacity="0.25"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M0 8H13V16H0"
+          stroke="#000"
+          strokeOpacity="0.3"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M21 8H34V16H21"
+          stroke="#000"
+          strokeOpacity="0.3"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M13 12H21"
+          stroke="#000"
+          strokeOpacity="0.3"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M13 0V24"
+          stroke="#000"
+          strokeOpacity="0.3"
+          strokeWidth="0.8"
+        />
+        <path
+          d="M21 0V24"
+          stroke="#000"
+          strokeOpacity="0.3"
+          strokeWidth="0.8"
+        />
       </svg>
       {/* Contactless waves */}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white/40 drop-shadow">
-        <path d="M8.5 16.5C9.5 15.5 10 14 10 12C10 10 9.5 8.5 8.5 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M12 19C13.5 17 14.5 14.5 14.5 12C14.5 9.5 13.5 7 12 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M15.5 21.5C17.5 19 19 15.5 19 12C19 8.5 17.5 5 15.5 2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        className="text-white/40 drop-shadow"
+      >
+        <path
+          d="M8.5 16.5C9.5 15.5 10 14 10 12C10 10 9.5 8.5 8.5 7.5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M12 19C13.5 17 14.5 14.5 14.5 12C14.5 9.5 13.5 7 12 5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M15.5 21.5C17.5 19 19 15.5 19 12C19 8.5 17.5 5 15.5 2.5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
       </svg>
     </div>
   );
@@ -90,7 +160,9 @@ export function AccountsPanel() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Reconcile modal state
-  const [reconcileAccount, setReconcileAccount] = useState<Account | null>(null);
+  const [reconcileAccount, setReconcileAccount] = useState<Account | null>(
+    null,
+  );
   const [actualBalanceInput, setActualBalanceInput] = useState("");
   const [reconcileNote, setReconcileNote] = useState("");
 
@@ -147,8 +219,10 @@ export function AccountsPanel() {
     if (!form.name.trim()) return;
 
     let exchangeRate = 1;
-    if (form.assetType === "gold_24k") exchangeRate = exchangeRates.GOLD_24K || 4200;
-    else if (form.assetType === "gold_21k") exchangeRate = exchangeRates.GOLD_21K || 3675;
+    if (form.assetType === "gold_24k")
+      exchangeRate = exchangeRates.GOLD_24K || 4200;
+    else if (form.assetType === "gold_21k")
+      exchangeRate = exchangeRates.GOLD_21K || 3675;
     else if (form.currency === "USD") exchangeRate = exchangeRates.USD || 50;
     else if (form.currency === "EUR") exchangeRate = exchangeRates.EUR || 54;
     else if (form.currency === "SAR") exchangeRate = exchangeRates.SAR || 13.3;
@@ -169,7 +243,8 @@ export function AccountsPanel() {
         type: form.type,
         assetType: form.assetType,
         unitBalance: isNaN(unitBal) ? undefined : unitBal,
-        exchangeRateToBase: form.assetType !== "standard" ? exchangeRate : undefined,
+        exchangeRateToBase:
+          form.assetType !== "standard" ? exchangeRate : undefined,
         balance: calculatedBalance,
         currency: form.currency,
         color: form.color,
@@ -182,7 +257,8 @@ export function AccountsPanel() {
         type: form.type,
         assetType: form.assetType,
         unitBalance: isNaN(unitBal) ? undefined : unitBal,
-        exchangeRateToBase: form.assetType !== "standard" ? exchangeRate : undefined,
+        exchangeRateToBase:
+          form.assetType !== "standard" ? exchangeRate : undefined,
         balance: calculatedBalance,
         currency: form.currency,
         color: form.color,
@@ -201,55 +277,6 @@ export function AccountsPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Dynamic Multi-Currency & Gold Live Rates Bar */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#0C121E] via-[#101827] to-[#0C121E] border border-white/[0.08] p-3.5 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-inner">
-            <Coins size={16} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-white tracking-wide block">
-              Live Asset Vault & FX Rates
-            </span>
-            <span className="text-[10px] text-white/40">Base currency conversion in EGP</span>
-          </div>
-        </div>
-
-        {/* Rates chips */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center gap-1.5 font-mono">
-            <span className="text-white/40 text-[10px]">USD:</span>
-            <span className="font-bold text-white tabular-nums">{exchangeRates.USD} EGP</span>
-          </div>
-
-          <div className="px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center gap-1.5 font-mono">
-            <span className="text-white/40 text-[10px]">EUR:</span>
-            <span className="font-bold text-white tabular-nums">{exchangeRates.EUR} EGP</span>
-          </div>
-
-          <div className="px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center gap-1.5 font-mono">
-            <span className="text-amber-400 text-[10px]">Gold 24K:</span>
-            <span className="font-bold text-amber-300 tabular-nums">{exchangeRates.GOLD_24K} EGP/g</span>
-          </div>
-
-          <div className="px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center gap-1.5 font-mono hidden sm:flex">
-            <span className="text-amber-400/80 text-[10px]">Gold 21K:</span>
-            <span className="font-bold text-amber-300/90 tabular-nums">{exchangeRates.GOLD_21K} EGP/g</span>
-          </div>
-
-          <button
-            onClick={() => {
-              setTempRates(exchangeRates);
-              setShowRatesModal(true);
-            }}
-            className="p-1.5 rounded-xl hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-            title="Edit live conversion rates"
-          >
-            <RefreshCw size={13} />
-          </button>
-        </div>
-      </div>
-
       {/* Net Worth & Assets Allocation Breakdown Banner */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Total Net Worth */}
@@ -278,7 +305,9 @@ export function AccountsPanel() {
           <span className="stat-label">Asset Allocation</span>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div className="bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-blue-400 font-medium uppercase block">Liquid Cash</span>
+              <span className="text-[10px] text-blue-400 font-medium uppercase block">
+                Liquid Cash
+              </span>
               <span
                 className={cn(
                   "text-base font-bold font-mono text-white tabular-nums",
@@ -289,7 +318,9 @@ export function AccountsPanel() {
               </span>
             </div>
             <div className="bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-amber-400 font-medium uppercase block">Hard Assets/Gold</span>
+              <span className="text-[10px] text-amber-400 font-medium uppercase block">
+                Hard Assets/Gold
+              </span>
               <span
                 className={cn(
                   "text-base font-bold font-mono text-amber-300 tabular-nums",
@@ -307,7 +338,9 @@ export function AccountsPanel() {
           <span className="stat-label">External Position</span>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div className="bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-emerald-400 font-medium uppercase block">Owed to you</span>
+              <span className="text-[10px] text-emerald-400 font-medium uppercase block">
+                Owed to you
+              </span>
               <span
                 className={cn(
                   "text-base font-bold font-mono text-emerald-400 tabular-nums",
@@ -318,7 +351,9 @@ export function AccountsPanel() {
               </span>
             </div>
             <div className="bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-rose-400 font-medium uppercase block">You Owe Others</span>
+              <span className="text-[10px] text-rose-400 font-medium uppercase block">
+                You Owe Others
+              </span>
               <span
                 className={cn(
                   "text-base font-bold font-mono text-rose-400 tabular-nums",
@@ -335,12 +370,20 @@ export function AccountsPanel() {
       {/* Header and Add Button */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="section-title text-base sm:text-lg">Bank Cards & Wallet Vault</h2>
+          <h2 className="section-title text-base sm:text-lg">
+            Bank Cards & Wallet Vault
+          </h2>
           <p className="text-xs text-white/40">
-            Skeuomorphic digital representations with 30-day net flow and direct balance adjustment
+            Skeuomorphic digital representations with 30-day net flow and direct
+            balance adjustment
           </p>
         </div>
-        <Button icon={<Plus size={16} />} onClick={openAdd} size="sm" className="bg-blue-600 hover:bg-blue-500 text-white">
+        <Button
+          icon={<Plus size={16} />}
+          onClick={openAdd}
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-500 text-white"
+        >
           Add Account / Asset
         </Button>
       </div>
@@ -349,12 +392,15 @@ export function AccountsPanel() {
       {accounts.length === 0 ? (
         <Card className="text-center py-16">
           <Wallet size={40} className="mx-auto text-white/20 mb-4" />
-          <p className="text-white/40 text-sm">No accounts yet. Add your first bank account or wallet!</p>
+          <p className="text-white/40 text-sm">
+            No accounts yet. Add your first bank account or wallet!
+          </p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {accounts.map((account) => {
-            const themeKey = (account.brandTheme || "royal_blue") as CardBrandTheme;
+            const themeKey = (account.brandTheme ||
+              "royal_blue") as CardBrandTheme;
             const theme = CARD_THEMES[themeKey] || CARD_THEMES.royal_blue;
             const netFlow = getAccount30DayNetFlow(account.id);
 
@@ -429,16 +475,22 @@ export function AccountsPanel() {
                     </span>
 
                     {/* Unit balance subtitle if foreign/gold */}
-                    {account.unitBalance !== undefined && account.assetType !== "standard" && (
-                      <span className="text-[10px] text-amber-200 font-mono block">
-                        Vault: {account.unitBalance} {account.assetType?.includes("gold") ? "Grams" : account.currency}
-                      </span>
-                    )}
+                    {account.unitBalance !== undefined &&
+                      account.assetType !== "standard" && (
+                        <span className="text-[10px] text-amber-200 font-mono block">
+                          Vault: {account.unitBalance}{" "}
+                          {account.assetType?.includes("gold")
+                            ? "Grams"
+                            : account.currency}
+                        </span>
+                      )}
                   </div>
 
                   {/* 30-Day Mini Net-Flow Indicator */}
                   <div className="text-right flex-shrink-0">
-                    <span className="text-[9px] text-white/50 block font-medium uppercase">30D Net Flow</span>
+                    <span className="text-[9px] text-white/50 block font-medium uppercase">
+                      30D Net Flow
+                    </span>
                     <div
                       className={cn(
                         "inline-flex items-center gap-0.5 text-xs font-mono font-bold px-2 py-0.5 rounded-full border backdrop-blur-md",
@@ -448,7 +500,11 @@ export function AccountsPanel() {
                         privacyMode && "privacy-blur",
                       )}
                     >
-                      {netFlow >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownLeft size={12} />}
+                      {netFlow >= 0 ? (
+                        <ArrowUpRight size={12} />
+                      ) : (
+                        <ArrowDownLeft size={12} />
+                      )}
                       <span>
                         {netFlow >= 0 ? "+" : ""}
                         {formatCurrency(netFlow, account.currency)}
@@ -471,13 +527,18 @@ export function AccountsPanel() {
         >
           <form onSubmit={handleReconcileSubmit} className="space-y-4">
             <p className="text-xs text-white/60">
-              Enter the exact balance currently shown in your real bank app or wallet. Walleteer will automatically calculate the discrepancy and log a system reconciliation transaction.
+              Enter the exact balance currently shown in your real bank app or
+              wallet. Walleteer will automatically calculate the discrepancy and
+              log a system reconciliation transaction.
             </p>
 
             <div className="bg-white/[0.03] p-3 rounded-xl border border-white/[0.06] flex items-center justify-between text-xs font-mono">
               <span className="text-white/50">Recorded Balance:</span>
               <span className="font-bold text-white">
-                {formatCurrency(reconcileAccount.balance, reconcileAccount.currency)}
+                {formatCurrency(
+                  reconcileAccount.balance,
+                  reconcileAccount.currency,
+                )}
               </span>
             </div>
 
@@ -502,13 +563,19 @@ export function AccountsPanel() {
                 <span
                   className={cn(
                     "font-mono font-bold",
-                    parseFloat(actualBalanceInput) - reconcileAccount.balance >= 0
+                    parseFloat(actualBalanceInput) - reconcileAccount.balance >=
+                      0
                       ? "text-emerald-400"
                       : "text-rose-400",
                   )}
                 >
-                  {parseFloat(actualBalanceInput) - reconcileAccount.balance >= 0 ? "+" : ""}
-                  {(parseFloat(actualBalanceInput) - reconcileAccount.balance).toFixed(2)}{" "}
+                  {parseFloat(actualBalanceInput) - reconcileAccount.balance >=
+                  0
+                    ? "+"
+                    : ""}
+                  {(
+                    parseFloat(actualBalanceInput) - reconcileAccount.balance
+                  ).toFixed(2)}{" "}
                   {reconcileAccount.currency}
                 </span>
               </div>
@@ -526,10 +593,17 @@ export function AccountsPanel() {
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.08]">
-              <Button type="button" variant="ghost" onClick={() => setReconcileAccount(null)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setReconcileAccount(null)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white">
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-500 text-white"
+              >
                 Apply & Reconcile
               </Button>
             </div>
@@ -541,7 +615,9 @@ export function AccountsPanel() {
       <Modal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
-        title={editingAccount ? "Edit Account / Asset" : "Add Bank Card or Asset"}
+        title={
+          editingAccount ? "Edit Account / Asset" : "Add Bank Card or Asset"
+        }
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -556,11 +632,15 @@ export function AccountsPanel() {
             <Select
               label="Account Type"
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as AccountType })}
-              options={Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => ({
-                value,
-                label,
-              }))}
+              onChange={(e) =>
+                setForm({ ...form, type: e.target.value as AccountType })
+              }
+              options={Object.entries(ACCOUNT_TYPE_LABELS).map(
+                ([value, label]) => ({
+                  value,
+                  label,
+                }),
+              )}
             />
 
             <Select
@@ -572,10 +652,12 @@ export function AccountsPanel() {
                 if (val === "gold_24k" || val === "gold_21k") cur = "EGP";
                 setForm({ ...form, assetType: val, currency: cur });
               }}
-              options={Object.entries(ASSET_TYPE_LABELS).map(([value, label]) => ({
-                value,
-                label,
-              }))}
+              options={Object.entries(ASSET_TYPE_LABELS).map(
+                ([value, label]) => ({
+                  value,
+                  label,
+                }),
+              )}
             />
           </div>
 
@@ -584,7 +666,9 @@ export function AccountsPanel() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
               <div>
                 <label className="label-base text-amber-200">
-                  {form.assetType.includes("gold") ? "Gold Weight (Grams)" : "Units in Foreign Currency"}
+                  {form.assetType.includes("gold")
+                    ? "Gold Weight (Grams)"
+                    : "Units in Foreign Currency"}
                 </label>
                 <input
                   type="number"
@@ -592,22 +676,36 @@ export function AccountsPanel() {
                   required
                   placeholder="e.g. 10 for 10g Gold, 500 for $500"
                   value={form.unitBalance}
-                  onChange={(e) => setForm({ ...form, unitBalance: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, unitBalance: e.target.value })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
 
               <div>
-                <label className="label-base text-amber-200">Currency / Unit</label>
+                <label className="label-base text-amber-200">
+                  Currency / Unit
+                </label>
                 <select
                   value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, currency: e.target.value })
+                  }
                   className="input-base"
                 >
-                  <option value="EGP" className="bg-[#111827]">EGP (Gold Grams)</option>
-                  <option value="USD" className="bg-[#111827]">USD ($)</option>
-                  <option value="EUR" className="bg-[#111827]">EUR (€)</option>
-                  <option value="SAR" className="bg-[#111827]">SAR (ر.س)</option>
+                  <option value="EGP" className="bg-[#111827]">
+                    EGP (Gold Grams)
+                  </option>
+                  <option value="USD" className="bg-[#111827]">
+                    USD ($)
+                  </option>
+                  <option value="EUR" className="bg-[#111827]">
+                    EUR (€)
+                  </option>
+                  <option value="SAR" className="bg-[#111827]">
+                    SAR (ر.س)
+                  </option>
                 </select>
               </div>
             </div>
@@ -649,11 +747,15 @@ export function AccountsPanel() {
                   className={cn(
                     "p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all bg-gradient-to-r",
                     theme.gradient,
-                    form.brandTheme === theme.id ? "ring-2 ring-white border-white" : "border-white/10 opacity-70 hover:opacity-100",
+                    form.brandTheme === theme.id
+                      ? "ring-2 ring-white border-white"
+                      : "border-white/10 opacity-70 hover:opacity-100",
                   )}
                 >
                   <span className="truncate text-white">{theme.name}</span>
-                  {form.brandTheme === theme.id && <Check size={14} className="text-white" />}
+                  {form.brandTheme === theme.id && (
+                    <Check size={14} className="text-white" />
+                  )}
                 </button>
               ))}
             </div>
@@ -666,16 +768,25 @@ export function AccountsPanel() {
               type="text"
               placeholder="e.g. •••• 4829 or 010 •••• 9102"
               value={form.accountNumberMasked}
-              onChange={(e) => setForm({ ...form, accountNumberMasked: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, accountNumberMasked: e.target.value })
+              }
               className="input-base font-mono"
             />
           </div>
 
           <div className="flex gap-3 pt-3 border-t border-white/[0.08]">
-            <Button variant="ghost" onClick={() => setShowForm(false)} className="flex-1">
+            <Button
+              variant="ghost"
+              onClick={() => setShowForm(false)}
+              className="flex-1"
+            >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white">
+            <Button
+              type="submit"
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
+            >
               {editingAccount ? "Save Changes" : "Create Card"}
             </Button>
           </div>
@@ -691,7 +802,9 @@ export function AccountsPanel() {
         >
           <form onSubmit={handleSaveRates} className="space-y-4">
             <p className="text-xs text-white/60">
-              Set the conversion rates to Egyptian Pound (EGP). All foreign currencies and gold assets will recalculate their net worth in real-time.
+              Set the conversion rates to Egyptian Pound (EGP). All foreign
+              currencies and gold assets will recalculate their net worth in
+              real-time.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -701,7 +814,12 @@ export function AccountsPanel() {
                   type="number"
                   step="0.1"
                   value={tempRates.USD}
-                  onChange={(e) => setTempRates({ ...tempRates, USD: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setTempRates({
+                      ...tempRates,
+                      USD: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
@@ -712,7 +830,12 @@ export function AccountsPanel() {
                   type="number"
                   step="0.1"
                   value={tempRates.EUR}
-                  onChange={(e) => setTempRates({ ...tempRates, EUR: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setTempRates({
+                      ...tempRates,
+                      EUR: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
@@ -723,7 +846,12 @@ export function AccountsPanel() {
                   type="number"
                   step="0.05"
                   value={tempRates.SAR}
-                  onChange={(e) => setTempRates({ ...tempRates, SAR: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setTempRates({
+                      ...tempRates,
+                      SAR: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
@@ -734,7 +862,12 @@ export function AccountsPanel() {
                   type="number"
                   step="10"
                   value={tempRates.GOLD_24K}
-                  onChange={(e) => setTempRates({ ...tempRates, GOLD_24K: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setTempRates({
+                      ...tempRates,
+                      GOLD_24K: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
@@ -745,7 +878,12 @@ export function AccountsPanel() {
                   type="number"
                   step="10"
                   value={tempRates.GOLD_21K}
-                  onChange={(e) => setTempRates({ ...tempRates, GOLD_21K: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setTempRates({
+                      ...tempRates,
+                      GOLD_21K: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="input-base font-mono font-bold"
                 />
               </div>
@@ -755,7 +893,10 @@ export function AccountsPanel() {
               <Button variant="ghost" onClick={() => setShowRatesModal(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white">
+              <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-500 text-white"
+              >
                 Update Rates
               </Button>
             </div>
@@ -772,10 +913,15 @@ export function AccountsPanel() {
           size="sm"
         >
           <p className="text-white/60 text-sm mb-6">
-            This will permanently delete the account and all associated transactions. This action cannot be undone.
+            This will permanently delete the account and all associated
+            transactions. This action cannot be undone.
           </p>
           <div className="flex gap-3">
-            <Button variant="ghost" onClick={() => setConfirmDelete(null)} className="flex-1">
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmDelete(null)}
+              className="flex-1"
+            >
               Cancel
             </Button>
             <Button
