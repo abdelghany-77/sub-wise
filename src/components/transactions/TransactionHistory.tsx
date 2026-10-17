@@ -15,6 +15,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Download,
+  RotateCcw,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { useToastStore } from "../../store/useToastStore";
@@ -46,6 +48,7 @@ export function TransactionHistory() {
     deleteTransaction,
     addTransaction,
     getAccountById,
+    recordBackup,
     privacyMode,
   } = useStore();
   const { addToast } = useToastStore();
@@ -155,6 +158,57 @@ export function TransactionHistory() {
     });
   };
 
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      addToast({
+        type: "warning",
+        message: "No transactions to export",
+      });
+      return;
+    }
+    const headers = [
+      "ID",
+      "Date",
+      "Type",
+      "Amount",
+      "Currency",
+      "Category",
+      "Account",
+      "ToAccount",
+      "Note",
+      "IsRecurring",
+    ];
+    const rows = filtered.map((tx) => {
+      const fromAcc = getAccountById(tx.accountId);
+      const toAcc = tx.toAccountId ? getAccountById(tx.toAccountId) : undefined;
+      return [
+        `"${tx.id}"`,
+        `"${tx.date}"`,
+        `"${tx.type}"`,
+        tx.amount,
+        `"${fromAcc?.currency || "EGP"}"`,
+        `"${tx.category || ""}"`,
+        `"${fromAcc?.name || ""}"`,
+        `"${toAcc?.name || ""}"`,
+        `"${(tx.note || "").replace(/"/g, '""')}"`,
+        `"${tx.isRecurring ? "yes" : "no"}"`,
+      ].join(",");
+    });
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `walleteer_transactions_${new Date().toISOString().split("T")[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    recordBackup();
+    addToast({
+      type: "success",
+      message: `Exported ${filtered.length} transactions to CSV`,
+    });
+  };
+
   const TypeIcon = ({ type }: { type: Transaction["type"] }) => {
     if (type === "income")
       return <ArrowDownLeft size={15} className="text-emerald-400" />;
@@ -176,9 +230,19 @@ export function TransactionHistory() {
             Manage, filter, and review all account movements
           </p>
         </div>
-        <span className="text-xs font-mono bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-full text-white/60">
-          {filtered.length} transaction{filtered.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-white/80 hover:text-white border border-white/10 transition-colors shadow-sm"
+            title="Export filtered transactions to CSV"
+          >
+            <Download size={14} />
+            <span>Export CSV</span>
+          </button>
+          <span className="text-xs font-mono bg-white/[0.05] border border-white/[0.08] px-2.5 py-1.5 rounded-xl text-white/60">
+            {filtered.length} transaction{filtered.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Filter Toolbar */}
@@ -295,11 +359,26 @@ export function TransactionHistory() {
 
       {/* Transaction Table / List */}
       {filtered.length === 0 ? (
-        <Card className="text-center py-16">
+        <Card className="text-center py-16 p-6">
           <Filter size={36} className="mx-auto text-white/20 mb-3" />
-          <p className="text-white/40 text-sm">
-            No transactions match your current filters
+          <h3 className="text-base font-semibold text-white">No transactions found</h3>
+          <p className="text-white/40 text-xs mt-1 mb-4 max-w-sm mx-auto">
+            No transactions match your current search and filter criteria.
           </p>
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilterCategory("All");
+              setFilterAccount("all");
+              setFilterType("all");
+              setDateFrom("");
+              setDateTo("");
+            }}
+            className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white border border-white/10 transition-colors inline-flex items-center gap-1.5 shadow-sm"
+          >
+            <RotateCcw size={13} />
+            <span>Reset Filters</span>
+          </button>
         </Card>
       ) : (
         <div className="space-y-2">

@@ -167,8 +167,9 @@ function StatCard({
 }
 
 export function DashboardStats() {
-  const { transactions, accounts, getNetWorthByCurrency, privacyMode } =
+  const { transactions, accounts, getNetWorthByCurrency, getNetWorthBreakdown, privacyMode } =
     useStore();
+  const breakdown = getNetWorthBreakdown();
 
   const { thisMonthStats, lastMonthStats, sparklines } = useMemo(() => {
     const now = new Date();
@@ -365,24 +366,43 @@ export function DashboardStats() {
         sparklineData={sparklines.netWorth}
         sparklineColor="#3B82F6"
       >
-        {currencies.length > 1 && (
+        <>
+          {currencies.length > 1 && (
+            <div
+              className={cn(
+                "flex flex-col gap-0.5 mt-1 transition-all duration-300",
+                privacyMode && "privacy-blur",
+              )}
+            >
+              {currencies.map((cur) => (
+                <span
+                  key={cur}
+                  className="stat-value text-white text-sm font-mono"
+                >
+                  {formatCurrency(netWorthByCurrency[cur], cur)}
+                </span>
+              ))}
+            </div>
+          )}
           <div
             className={cn(
-              "flex flex-col gap-0.5 mt-1 transition-all duration-300",
+              "flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-white/[0.06] text-[10px]",
               privacyMode && "privacy-blur",
             )}
           >
-            {currencies.map((cur) => (
-              <span
-                key={cur}
-                className="stat-value text-white text-sm font-mono"
-              >
-                {formatCurrency(netWorthByCurrency[cur], cur)}
+            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-mono">
+              Cash: {formatCurrency(breakdown.liquidCash, "EGP")}
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+              Assets/Gold: {formatCurrency(breakdown.hardAssets, "EGP")}
+            </span>
+            {breakdown.receivables > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
+                IOUs: +{formatCurrency(breakdown.receivables, "EGP")}
               </span>
-            ))}
+            )}
           </div>
-        )}
-        <p className="text-[10px] text-white/25 mt-1">Excl. savings</p>
+        </>
       </StatCard>
 
       {/* 2. Total income / Income */}

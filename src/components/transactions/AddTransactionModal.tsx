@@ -1,22 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
   Plus,
   Repeat,
+  Check,
+  Calendar,
+  Sparkles,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
-import { Input, Select, Textarea } from "../ui/FormFields";
 import {
   type TransactionType,
   type Transaction,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
+  CATEGORY_COLORS,
 } from "../../types";
-import { todayISO } from "../../lib/utils";
+import { todayISO, cn } from "../../lib/utils";
 
 interface FormData {
   type: TransactionType;
@@ -57,18 +60,36 @@ export function AddTransactionModal({
   onClose,
   autoOpen = false,
 }: Props) {
-  const { accounts, addTransaction, updateTransaction } = useStore();
+  const { accounts, transactions, addTransaction, updateTransaction } = useStore();
   const [isOpen, setIsOpen] = useState(autoOpen);
   const [form, setForm] = useState<FormData>({
     ...DEFAULT_FORM,
     type: initialType,
+    accountId: accounts[0]?.id ?? "",
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!editTransaction;
 
-  const categories =
-    form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  // Compute Top 5 most-used categories dynamically
+  const topCategories = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const tx of transactions) {
+      if (tx.type === form.type && tx.category && tx.category !== "Transfer") {
+        counts[tx.category] = (counts[tx.category] ?? 0) + 1;
+      }
+    }
+    const sorted = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat]) => cat);
+
+    const fallbacks = form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    const combined = Array.from(new Set([...sorted, ...fallbacks]));
+    return combined.slice(0, 5);
+  }, [transactions, form.type]);
+
+  const allCategories = form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
   useEffect(() => {
     if (editTransaction) {
@@ -88,6 +109,23 @@ export function AddTransactionModal({
       setIsOpen(true);
     }
   }, [editTransaction]);
+
+  // Set default category on type change if none selected
+  useEffect(() => {
+    if (!form.category && topCategories.length > 0) {
+      setForm((prev) => ({ ...prev, category: topCategories[0] }));
+    }
+  }, [topCategories, form.category]);
+
+  // Focus amount input when opened
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        amountInputRef.current?.focus();
+        amountInputRef.current?.select();
+      }, 100);
+    }
+  }, [isOpen]);
 
   const validate = () => {
     const e: Partial<Record<string, string>> = {};
@@ -111,20 +149,13 @@ export function AddTransactionModal({
       const sourceAccount = accounts.find((a) => a.id === form.accountId);
       if (sourceAccount) {
         let available = sourceAccount.balance;
-        if (
-          isEditMode &&
-          editTransaction &&
-          editTransaction.accountId === form.accountId
-        ) {
-          if (
-            editTransaction.type === "expense" ||
-            editTransaction.type === "transfer"
-          ) {
+        if (isEditMode && editTransaction && editTransaction.accountId === form.accountId) {
+          if (editTransaction.type === "expense" || editTransaction.type === "transfer") {
             available += editTransaction.amount;
           }
         }
         if (Number(form.amount) > available) {
-          e.amount = `Insufficient balance (${sourceAccount.currency} ${available.toFixed(2)} available)`;
+          e.amount = `Insufficient funds (${sourceAccount.currency} ${available.toFixed(2)} available)`;
         }
       }
     }
@@ -137,6 +168,7 @@ export function AddTransactionModal({
       ...DEFAULT_FORM,
       type: initialType,
       accountId: accounts[0]?.id ?? "",
+      category: (initialType === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)[0],
     });
     setErrors({});
     setIsOpen(true);
@@ -147,10 +179,11 @@ export function AddTransactionModal({
     onClose?.();
   };
 
-  const handleSubmit = () => {
-    const e = validate();
-    if (Object.keys(e).length > 0) {
-      setErrors(e);
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       return;
     }
 
@@ -163,13 +196,9 @@ export function AddTransactionModal({
       accountId: form.accountId,
       toAccountId: form.type === "transfer" ? form.toAccountId : undefined,
       isRecurring: form.isRecurring || undefined,
-      recurrenceFrequency: form.isRecurring
-        ? form.recurrenceFrequency
-        : undefined,
+      recurrenceFrequency: form.isRecurring ? form.recurrenceFrequency : undefined,
       recurrenceEndDate:
-        form.isRecurring && form.recurrenceEndDate
-          ? form.recurrenceEndDate
-          : undefined,
+        form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
     };
 
     if (isEditMode && editTransaction) {
@@ -180,23 +209,7 @@ export function AddTransactionModal({
     handleClose();
   };
 
-  const TYPE_CONFIG = {
-    income: {
-      label: "Income",
-      color: "text-emerald-400",
-      icon: <ArrowDownLeft size={16} />,
-    },
-    expense: {
-      label: "Expense",
-      color: "text-rose-400",
-      icon: <ArrowUpRight size={16} />,
-    },
-    transfer: {
-      label: "Transfer",
-      color: "text-sky-400",
-      icon: <ArrowLeftRight size={16} />,
-    },
-  };
+  const selectedAccount = accounts.find((a) => a.id === form.accountId);
 
   return (
     <>
@@ -210,15 +223,336 @@ export function AddTransactionModal({
       <Modal
         isOpen={isOpen}
         onClose={handleClose}
-        title={isEditMode ? "Edit Transaction" : "New Transaction"}
+        title={isEditMode ? "Edit Transaction" : "Quick Add Transaction"}
         size="md"
-        footer={
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={handleClose} className="flex-1">
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 1. Transaction Type Switcher */}
+          <div className="grid grid-cols-3 gap-2 bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  type: "expense",
+                  category: EXPENSE_CATEGORIES[0],
+                })
+              }
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                form.type === "expense"
+                  ? "bg-rose-600 text-white shadow-lg shadow-rose-900/40"
+                  : "text-white/50 hover:text-white",
+              )}
+            >
+              <ArrowUpRight size={15} />
+              <span>Expense</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  type: "income",
+                  category: INCOME_CATEGORIES[0],
+                })
+              }
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                form.type === "income"
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40"
+                  : "text-white/50 hover:text-white",
+              )}
+            >
+              <ArrowDownLeft size={15} />
+              <span>Income</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  type: "transfer",
+                  category: "Transfer",
+                })
+              }
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                form.type === "transfer"
+                  ? "bg-sky-600 text-white shadow-lg shadow-sky-900/40"
+                  : "text-white/50 hover:text-white",
+              )}
+            >
+              <ArrowLeftRight size={15} />
+              <span>Transfer</span>
+            </button>
+          </div>
+
+          {/* 2. Massive Centered Amount Input (Native Keypad Screen Feel) */}
+          <div className="bg-gradient-to-b from-white/[0.03] to-white/[0.01] rounded-3xl p-5 border border-white/[0.08] text-center relative overflow-hidden">
+            <div className="text-[10px] uppercase font-bold tracking-widest text-white/40 mb-1">
+              Amount ({selectedAccount?.currency || "EGP"})
+            </div>
+
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-2xl sm:text-3xl font-extrabold text-white/40">
+                {selectedAccount?.currency === "USD" ? "$" : selectedAccount?.currency === "EUR" ? "€" : "EGP"}
+              </span>
+              <input
+                ref={amountInputRef}
+                type="number"
+                step="any"
+                inputMode="decimal"
+                placeholder="0"
+                value={form.amount}
+                onChange={(e) => {
+                  setForm({ ...form, amount: e.target.value });
+                  if (errors.amount) setErrors({ ...errors, amount: undefined });
+                }}
+                className={cn(
+                  "text-4xl sm:text-5xl font-black font-mono tracking-tight tabular-nums bg-transparent text-white text-center focus:outline-none w-full max-w-[260px] placeholder-white/20",
+                  form.type === "income"
+                    ? "text-emerald-400"
+                    : form.type === "expense"
+                      ? "text-rose-400"
+                      : "text-sky-400",
+                )}
+              />
+            </div>
+
+            {errors.amount && (
+              <p className="text-xs text-rose-400 font-medium mt-1 animate-pulse">
+                {errors.amount}
+              </p>
+            )}
+          </div>
+
+          {/* 3. Quick Account Switcher Horizontal Pills */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">
+                {form.type === "transfer" ? "From Account" : "Account"}
+              </span>
+              {selectedAccount && (
+                <span className="text-[11px] text-white/40 font-mono">
+                  Avail: {selectedAccount.currency} {selectedAccount.balance.toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+              {accounts.map((acc) => {
+                const isSelected = form.accountId === acc.id;
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setForm({ ...form, accountId: acc.id })}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
+                      isSelected
+                        ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-900/40"
+                        : "bg-white/[0.04] text-white/60 hover:text-white border-white/[0.08]",
+                    )}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: acc.color }}
+                    />
+                    <span>{acc.name}</span>
+                    {isSelected && <Check size={12} strokeWidth={3} />}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.accountId && (
+              <p className="text-xs text-rose-400 mt-1">{errors.accountId}</p>
+            )}
+          </div>
+
+          {/* Destination Account for Transfers */}
+          {form.type === "transfer" && (
+            <div>
+              <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1.5">
+                To Destination Account
+              </span>
+              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                {accounts
+                  .filter((a) => a.id !== form.accountId)
+                  .map((acc) => {
+                    const isSelected = form.toAccountId === acc.id;
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => setForm({ ...form, toAccountId: acc.id })}
+                        className={cn(
+                          "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
+                          isSelected
+                            ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-900/40"
+                            : "bg-white/[0.04] text-white/60 hover:text-white border-white/[0.08]",
+                        )}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: acc.color }}
+                        />
+                        <span>{acc.name}</span>
+                        {isSelected && <Check size={12} strokeWidth={3} />}
+                      </button>
+                    );
+                  })}
+              </div>
+              {errors.toAccountId && (
+                <p className="text-xs text-rose-400 mt-1">{errors.toAccountId}</p>
+              )}
+            </div>
+          )}
+
+          {/* 4. Top 5 Most-Used Category Pills (Under 3 seconds logging) */}
+          {form.type !== "transfer" && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles size={11} className="text-blue-400" />
+                  <span>Top Categories</span>
+                </span>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="bg-transparent text-[11px] text-blue-400 font-semibold focus:outline-none cursor-pointer"
+                >
+                  <option value="" disabled className="bg-[#111827]">
+                    More Categories...
+                  </option>
+                  {allCategories.map((c) => (
+                    <option key={c} value={c} className="bg-[#111827] text-white">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {topCategories.map((cat) => {
+                  const isSelected = form.category === cat;
+                  const catColor = CATEGORY_COLORS[cat] || "#3b82f6";
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setForm({ ...form, category: cat })}
+                      className={cn(
+                        "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border",
+                        isSelected
+                          ? "bg-white text-black border-white shadow-md font-bold"
+                          : "bg-white/[0.04] text-white/70 hover:text-white border-white/[0.08]",
+                      )}
+                      style={{
+                        borderColor: isSelected ? catColor : undefined,
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+              {errors.category && (
+                <p className="text-xs text-rose-400 mt-1">{errors.category}</p>
+              )}
+            </div>
+          )}
+
+          {/* 5. Date & Quick Note in compact row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1">
+                Date
+              </label>
+              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white">
+                <Calendar size={14} className="text-white/40" />
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  className="bg-transparent text-white focus:outline-none w-full"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1">
+                Note (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Lunch at Arkan, Uber ride"
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* 6. Recurring options accordion toggle */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isRecurring: !form.isRecurring })}
+              className={cn(
+                "flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-xl transition-all border",
+                form.isRecurring
+                  ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                  : "bg-white/[0.03] text-white/40 hover:text-white/70 border-white/[0.06]",
+              )}
+            >
+              <Repeat size={13} />
+              <span>Make Recurring Commitment</span>
+            </button>
+
+            {form.isRecurring && (
+              <div className="grid grid-cols-2 gap-3 mt-2 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+                <div>
+                  <label className="label-base text-[10px]">Frequency</label>
+                  <select
+                    value={form.recurrenceFrequency}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        recurrenceFrequency: e.target.value as FormData["recurrenceFrequency"],
+                      })
+                    }
+                    className="input-base text-xs py-1.5"
+                  >
+                    <option value="daily" className="bg-[#111827]">Daily</option>
+                    <option value="weekly" className="bg-[#111827]">Weekly</option>
+                    <option value="monthly" className="bg-[#111827]">Monthly</option>
+                    <option value="yearly" className="bg-[#111827]">Yearly</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label-base text-[10px]">End Date</label>
+                  <input
+                    type="date"
+                    value={form.recurrenceEndDate}
+                    onChange={(e) => setForm({ ...form, recurrenceEndDate: e.target.value })}
+                    className="input-base text-xs py-1.5"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Submit Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.08]">
+            <Button type="button" variant="ghost" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
+              type="submit"
               variant={
                 form.type === "income"
                   ? "income"
@@ -226,168 +560,13 @@ export function AddTransactionModal({
                     ? "expense"
                     : "primary"
               }
-              className="flex-1"
+              className="flex-1 font-bold text-sm py-2.5 shadow-lg"
             >
-              {TYPE_CONFIG[form.type].icon}
-              {isEditMode ? "Save" : "Add"} {TYPE_CONFIG[form.type].label}
+              {isEditMode ? "Update" : "Log"}{" "}
+              {form.type === "expense" ? "Expense" : form.type === "income" ? "Income" : "Transfer"}
             </Button>
           </div>
-        }
-      >
-        <div className="space-y-4">
-          {/* Type Selector */}
-          <div>
-            <label className="label-base">Transaction Type</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(TYPE_CONFIG) as TransactionType[]).map((t) => {
-                const cfg = TYPE_CONFIG[t];
-                const isActive = form.type === t;
-                return (
-                  <button
-                    key={t}
-                    onClick={() => setForm({ ...form, type: t, category: "" })}
-                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
-                      isActive
-                        ? t === "income"
-                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                          : t === "expense"
-                            ? "bg-rose-500/20 border-rose-500/40 text-rose-400"
-                            : "bg-sky-500/20 border-sky-500/40 text-sky-400"
-                        : "bg-white/[0.04] border-white/[0.08] text-white/50 hover:text-white hover:bg-white/[0.08]"
-                    }`}
-                  >
-                    {cfg.icon}
-                    {cfg.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Amount */}
-          <Input
-            label="Amount"
-            type="number"
-            placeholder="0.00"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            error={errors.amount}
-          />
-
-          {/* Account */}
-          <Select
-            label={form.type === "transfer" ? "From Account" : "Account"}
-            value={form.accountId}
-            onChange={(e) => setForm({ ...form, accountId: e.target.value })}
-            options={[
-              { value: "", label: "— Select account —" },
-              ...accounts.map((a) => ({
-                value: a.id,
-                label: `${a.name} (${a.currency} ${a.balance.toFixed(2)})`,
-              })),
-            ]}
-            error={errors.accountId}
-          />
-
-          {/* Transfer To */}
-          {form.type === "transfer" && (
-            <Select
-              label="To Account"
-              value={form.toAccountId}
-              onChange={(e) =>
-                setForm({ ...form, toAccountId: e.target.value })
-              }
-              options={[
-                { value: "", label: "— Select destination —" },
-                ...accounts
-                  .filter((a) => a.id !== form.accountId)
-                  .map((a) => ({
-                    value: a.id,
-                    label: `${a.name} (${a.currency} ${a.balance.toFixed(2)})`,
-                  })),
-              ]}
-              error={errors.toAccountId}
-            />
-          )}
-
-          {/* Category (not for transfers) */}
-          {form.type !== "transfer" && (
-            <Select
-              label="Category"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              options={[
-                { value: "", label: "— Select category —" },
-                ...categories.map((c) => ({ value: c, label: c })),
-              ]}
-              error={errors.category}
-            />
-          )}
-
-          {/* Date */}
-          <Input
-            label="Date"
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-          />
-
-          {/* Recurring Toggle */}
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() =>
-                setForm({ ...form, isRecurring: !form.isRecurring })
-              }
-              className={`flex items-center gap-2.5 w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 border ${
-                form.isRecurring
-                  ? "bg-blue-500/20 border-blue-500/40 text-blue-400"
-                  : "bg-white/[0.04] border-white/[0.08] text-white/50 hover:text-white hover:bg-white/[0.08]"
-              }`}
-            >
-              <Repeat size={16} />
-              Recurring Transaction
-            </button>
-
-            {form.isRecurring && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
-                <Select
-                  label="Frequency"
-                  value={form.recurrenceFrequency}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      recurrenceFrequency: e.target
-                        .value as FormData["recurrenceFrequency"],
-                    })
-                  }
-                  options={[
-                    { value: "daily", label: "Daily" },
-                    { value: "weekly", label: "Weekly" },
-                    { value: "monthly", label: "Monthly" },
-                    { value: "yearly", label: "Yearly" },
-                  ]}
-                />
-                <Input
-                  label="End Date (optional)"
-                  type="date"
-                  value={form.recurrenceEndDate}
-                  onChange={(e) =>
-                    setForm({ ...form, recurrenceEndDate: e.target.value })
-                  }
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Note */}
-          <Textarea
-            label="Note (optional)"
-            placeholder="Add a description..."
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
-          />
-        </div>
+        </form>
       </Modal>
     </>
   );
