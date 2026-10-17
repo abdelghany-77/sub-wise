@@ -15,14 +15,14 @@ import { Card } from "../ui/Card";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input, Select } from "../ui/FormFields";
-import { formatCurrency, cn } from "../../lib/utils";
+import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
 import { EXPENSE_CATEGORIES, CATEGORY_COLORS } from "../../types";
 import type { Budget } from "../../types";
 
 const CURRENCIES = ["EGP", "USD", "EUR", "GBP", "SAR", "AED"];
 
 export function BudgetsPanel() {
-  const { budgets, transactions, addBudget, updateBudget, deleteBudget, privacyMode } =
+  const { budgets, transactions, addBudget, updateBudget, deleteBudget, privacyMode, settings } =
     useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
@@ -35,21 +35,21 @@ export function BudgetsPanel() {
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
-  // Current month spending per category
-  const monthlySpending = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const prefix = `${year}-${month}`;
+  const cycle = useMemo(
+    () => getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1),
+    [settings.monthStartsOnDay],
+  );
 
+  // Financial cycle spending per category
+  const monthlySpending = useMemo(() => {
     const map: Record<string, number> = {};
     transactions
-      .filter((tx) => tx.type === "expense" && tx.date.startsWith(prefix))
+      .filter((tx) => tx.type === "expense" && cycle.isDateInCycle(tx.date))
       .forEach((tx) => {
         map[tx.category] = (map[tx.category] ?? 0) + tx.amount;
       });
     return map;
-  }, [transactions]);
+  }, [transactions, cycle]);
 
   const openAdd = () => {
     setEditingBudget(null);
@@ -131,9 +131,9 @@ export function BudgetsPanel() {
     <div className="space-y-5 pb-20 lg:pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="section-title">Budgets & Monthly Spending Limits</h2>
+          <h2 className="section-title">Budgets & Spending Limits</h2>
           <p className="text-xs text-white/40 mt-0.5">
-            Set category limits and track auto-deductions from net worth
+            Active Cycle: <span className="text-blue-300 font-medium font-mono">{cycle.cycleLabel}</span> ({cycle.remainingDays} days remaining)
           </p>
         </div>
         <Button icon={<Plus size={16} />} onClick={openAdd}>
@@ -161,7 +161,7 @@ export function BudgetsPanel() {
             <TrendingUp size={18} className="text-emerald-400" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-white/40">Total Spent</p>
+            <p className="text-xs text-white/40">Cycle Spent</p>
             <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
               {formatCurrency(totalSpent, budgets[0]?.currency)}
             </p>

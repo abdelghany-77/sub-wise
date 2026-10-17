@@ -8,9 +8,6 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Check,
-  ChevronDown,
-  ChevronUp,
-  Coins,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -172,7 +169,6 @@ export function AccountsPanel() {
   // Live rates edit modal
   const [showRatesModal, setShowRatesModal] = useState(false);
   const [tempRates, setTempRates] = useState(exchangeRates);
-  const [ratesExpanded, setRatesExpanded] = useState(false);
 
   const breakdown = getNetWorthBreakdown();
 
@@ -370,77 +366,6 @@ export function AccountsPanel() {
           </div>
         </Card>
       </div>
-
-      {/* Collapsible / Sleek Exchange Rates & Bullion Bar */}
-      <div className="rounded-2xl bg-[#0F1420]/80 border border-white/[0.08] backdrop-blur-xl overflow-hidden transition-all shadow-lg">
-        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setRatesExpanded(!ratesExpanded)}
-            className="flex items-center gap-2.5 text-left flex-1 min-w-0 group"
-            aria-expanded={ratesExpanded}
-          >
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
-              <Coins size={16} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-bold text-white tracking-wide">
-                  Live FX & Gold Bullion Rates
-                </span>
-                <span className="hidden sm:inline-flex px-1.5 py-0.2 rounded text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                  5 Rates
-                </span>
-              </div>
-              <p className="text-[11px] text-white/40 truncate">
-                USD: {exchangeRates.USD} EGP • EUR: {exchangeRates.EUR} EGP • 24K: {exchangeRates.GOLD_24K} EGP/g
-              </p>
-            </div>
-            <span className="text-white/40 group-hover:text-white transition-colors ml-auto pr-1">
-              {ratesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTempRates(exchangeRates);
-              setShowRatesModal(true);
-            }}
-            className="px-2.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white/70 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors flex-shrink-0"
-          >
-            <Edit2 size={12} />
-            <span>Edit Rates</span>
-          </button>
-        </div>
-
-        {/* Expanded Rate Chips */}
-        {ratesExpanded && (
-          <div className="px-3.5 sm:px-4 pb-4 pt-1 grid grid-cols-2 sm:grid-cols-5 gap-2.5 border-t border-white/[0.06] animate-fade-in">
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-white/40 uppercase block">USD / EGP</span>
-              <span className="text-sm font-bold font-mono text-white">{exchangeRates.USD} EGP</span>
-            </div>
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-white/40 uppercase block">EUR / EGP</span>
-              <span className="text-sm font-bold font-mono text-white">{exchangeRates.EUR} EGP</span>
-            </div>
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-white/40 uppercase block">SAR / EGP</span>
-              <span className="text-sm font-bold font-mono text-white">{exchangeRates.SAR} EGP</span>
-            </div>
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-amber-400/80 uppercase block">Gold 24K</span>
-              <span className="text-sm font-bold font-mono text-amber-300">{exchangeRates.GOLD_24K} EGP/g</span>
-            </div>
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-[10px] text-amber-400/80 uppercase block">Gold 21K</span>
-              <span className="text-sm font-bold font-mono text-amber-300">{exchangeRates.GOLD_21K} EGP/g</span>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Header and Add Button */}
       <div className="flex items-center justify-between">
         <div>

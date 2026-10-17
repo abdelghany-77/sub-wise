@@ -18,7 +18,7 @@ import { BalanceTrendChart } from "../charts/BalanceTrendChart";
 import { SpendingDonut } from "../charts/SpendingDonut";
 import { RecentTransactions } from "./RecentTransactions";
 import { UpcomingBillsWidget } from "./UpcomingBillsWidget";
-import { formatCurrency, cn } from "../../lib/utils";
+import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
 import type { Page } from "../layout/Sidebar";
 
 interface Props {
@@ -32,22 +32,21 @@ export function DashboardBentoView({ onNavigate }: Props) {
     transactions,
     privacyMode,
     togglePrivacyMode,
+    settings,
   } = useStore();
 
   const breakdown = getNetWorthBreakdown();
   const safeData = getSafeToSpend();
   const { dailyAllowance, remainingDays, daysInMonth, currentDay, status } = safeData;
 
-  // Month-to-date Cashflow Stats
-  const { mtdIncome, mtdExpenses, savingsRate, isSavingsPositive } = useMemo(() => {
-    const now = new Date();
-    const curYear = now.getFullYear();
-    const curMonth = now.getMonth();
+  const cycle = useMemo(
+    () => getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1),
+    [settings.monthStartsOnDay],
+  );
 
-    const mtdTxs = transactions.filter((tx) => {
-      const d = new Date(tx.date);
-      return d.getMonth() === curMonth && d.getFullYear() === curYear && !tx.isIou;
-    });
+  // Financial Cycle / Month-to-date Cashflow Stats
+  const { mtdIncome, mtdExpenses, savingsRate, isSavingsPositive } = useMemo(() => {
+    const mtdTxs = transactions.filter((tx) => cycle.isDateInCycle(tx.date) && !tx.isIou);
 
     let inc = 0;
     let exp = 0;
@@ -65,7 +64,7 @@ export function DashboardBentoView({ onNavigate }: Props) {
       savingsRate: rate,
       isSavingsPositive: net >= 0,
     };
-  }, [transactions]);
+  }, [transactions, cycle]);
 
   // Status config for Safe-To-Spend
   const safeStatusConfig = {
@@ -213,7 +212,7 @@ export function DashboardBentoView({ onNavigate }: Props) {
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1 text-white/50 text-[11px]">
                 <Calendar size={12} className="text-blue-400" />
-                <span>Month Pace</span>
+                <span>{safeData.cycleLabel || "Cycle Pace"}</span>
               </span>
               <span className="text-[11px] font-mono text-white/80 font-medium">
                 <strong className="text-white">{remainingDays} days</strong> left of {daysInMonth}
@@ -238,9 +237,14 @@ export function DashboardBentoView({ onNavigate }: Props) {
               <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center">
                 <TrendingUp size={16} />
               </div>
-              <span className="text-xs font-semibold text-white/80 tracking-wide uppercase">
-                Monthly Cashflow
-              </span>
+              <div>
+                <span className="text-xs font-semibold text-white/80 tracking-wide uppercase block">
+                  {settings.monthStartsOnDay && settings.monthStartsOnDay > 1 ? "Cycle Cashflow" : "Monthly Cashflow"}
+                </span>
+                <span className="text-[10px] text-teal-300/80 font-mono">
+                  {cycle.cycleLabel}
+                </span>
+              </div>
             </div>
 
             {/* Net Savings Percentage */}
@@ -293,7 +297,7 @@ export function DashboardBentoView({ onNavigate }: Props) {
 
           {/* Footer Subtitle */}
           <div className="pt-2 border-t border-white/[0.06] text-[10px] text-white/40 flex items-center justify-between">
-            <span>Net flow this month</span>
+            <span>Net flow this {settings.monthStartsOnDay && settings.monthStartsOnDay > 1 ? "cycle" : "month"}</span>
             <span
               className={cn(
                 "font-mono font-bold",

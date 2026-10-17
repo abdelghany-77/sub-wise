@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, cn } from "../../lib/utils";
+import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
 import { CATEGORY_COLORS } from "../../types";
 
 interface CustomTooltipProps {
@@ -60,19 +60,18 @@ function CustomLabel({
 }
 
 export function SpendingDonut() {
-  const { transactions, privacyMode } = useStore();
+  const { transactions, privacyMode, settings } = useStore();
+
+  const cycle = useMemo(
+    () => getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1),
+    [settings.monthStartsOnDay],
+  );
 
   const data = useMemo(() => {
-    const now = new Date();
     const byCategory = new Map<string, number>();
     for (const tx of transactions) {
       if (tx.type !== "expense") continue;
-      const d = new Date(tx.date);
-      if (
-        d.getMonth() !== now.getMonth() ||
-        d.getFullYear() !== now.getFullYear()
-      )
-        continue;
+      if (!cycle.isDateInCycle(tx.date)) continue;
       byCategory.set(
         tx.category,
         (byCategory.get(tx.category) ?? 0) + tx.amount,
@@ -82,7 +81,7 @@ export function SpendingDonut() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6); // top 6 categories
-  }, [transactions]);
+  }, [transactions, cycle]);
 
   const total = data.reduce((s, d) => s + d.value, 0);
 
@@ -91,10 +90,10 @@ export function SpendingDonut() {
       <Card className="h-[320px] flex flex-col justify-between p-4 sm:p-5">
         <div>
           <h3 className="text-sm font-semibold text-white">Category Breakdown</h3>
-          <p className="text-[11px] text-white/40">Monthly expense allocation</p>
+          <p className="text-[11px] text-white/40">{cycle.cycleLabel}</p>
         </div>
         <div className="flex-1 flex items-center justify-center text-white/30 text-xs">
-          No expense data yet this month
+          No expense data yet for this cycle
         </div>
       </Card>
     );
@@ -111,7 +110,7 @@ export function SpendingDonut() {
               privacyMode && "privacy-blur",
             )}
           >
-            This month: {formatCurrency(total)}
+            {cycle.cycleLabel}: {formatCurrency(total)}
           </p>
         </div>
       </div>

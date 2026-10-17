@@ -172,17 +172,7 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
             );
           })}
         </nav>
-
-        {/* Footer info */}
-        <div className="px-5 py-3.5 border-t border-white/[0.06] bg-[#07090E]/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] text-white/40 font-mono">Offline-First PWA</span>
-          </div>
-          <span className="text-[10px] text-white/30 font-mono">v0.3.0</span>
-        </div>
       </aside>
-
       {/* Mobile Glassmorphic Bottom Navigation Bar (< md) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0B0F17]/90 backdrop-blur-xl border-t border-white/[0.08] pb-safe">
         <div className="relative flex items-center justify-around px-2 py-1.5">

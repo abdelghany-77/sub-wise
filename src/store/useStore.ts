@@ -12,7 +12,7 @@ import type {
   NetWorthBreakdown,
 } from "../types";
 import { DEFAULT_EXCHANGE_RATES } from "../types";
-import { generateId } from "../lib/utils";
+import { generateId, getFinancialCycle } from "../lib/utils";
 import { DEMO_ACCOUNTS, DEMO_TRANSACTIONS } from "../data/demo";
 import { useToastStore } from "./useToastStore";
 
@@ -35,12 +35,14 @@ export interface AppSettings {
   defaultCurrency: string;
   dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
   weekStartsOn: "sunday" | "monday" | "saturday";
+  monthStartsOnDay: number; // 1 to 31 (e.g. 26 for salary payday)
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   defaultCurrency: "EGP",
   dateFormat: "MM/DD/YYYY",
   weekStartsOn: "saturday",
+  monthStartsOnDay: 1,
 };
 
 export const INITIAL_RECURRING: RecurringBill[] = [
@@ -229,13 +231,12 @@ function getNextRecurrenceDate(
 }
 
 /** Check if any budget crossed 80% or 100% after adding an expense */
-function checkBudgetAlerts(budgets: Budget[], transactions: Transaction[]) {
-  const now = new Date();
-  const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+function checkBudgetAlerts(budgets: Budget[], transactions: Transaction[], monthStartsOnDay = 1) {
+  const cycle = getFinancialCycle(new Date(), monthStartsOnDay);
 
   const spending: Record<string, number> = {};
   transactions
-    .filter((tx) => tx.type === "expense" && tx.date.startsWith(prefix) && !tx.isIou)
+    .filter((tx) => tx.type === "expense" && cycle.isDateInCycle(tx.date) && !tx.isIou)
     .forEach((tx) => {
       spending[tx.category] = (spending[tx.category] ?? 0) + tx.amount;
     });
@@ -426,8 +427,8 @@ export const useStore = create<WealthState>()(
 
         // Check budget alerts after expense (unless it's an IOU)
         if (tx.type === "expense" && !tx.isIou) {
-          const { budgets, transactions } = get();
-          checkBudgetAlerts(budgets, transactions);
+          const { budgets, transactions, settings } = get();
+          checkBudgetAlerts(budgets, transactions, settings.monthStartsOnDay || 1);
         }
       },
 
@@ -824,58 +825,50 @@ export const useStore = create<WealthState>()(
       },
 
       getSafeToSpend: () => {
-        const { transactions, recurring, monthlyBudgetTarget } = get();
+        const { transactions, recurring, monthlyBudgetTarget, settings } = get();
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth(); // 0-indexed
-        const currentDay = now.getDate();
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
+        const cycle = getFinancialCycle(now, settings.monthStartsOnDay || 1);
+        const todayStr = now.toISOString().split("T")[0];
 
-        const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
-
-        // 1. Month-to-date variable expenses (excluding transfers & lent IOUs)
+        // 1. Cycle-to-date variable expenses (excluding transfers & lent IOUs)
         const monthToDateExpenses = transactions
           .filter(
             (tx) =>
               tx.type === "expense" &&
-              tx.date.startsWith(currentMonthPrefix) &&
+              cycle.isDateInCycle(tx.date) &&
               !tx.isIou,
           )
           .reduce((sum, tx) => sum + tx.amount, 0);
 
-        // 2. Month-to-date income
+        // 2. Cycle-to-date income
         const monthToDateIncome = transactions
           .filter(
             (tx) =>
               tx.type === "income" &&
-              tx.date.startsWith(currentMonthPrefix) &&
+              cycle.isDateInCycle(tx.date) &&
               !tx.isIou,
           )
           .reduce((sum, tx) => sum + tx.amount, 0);
 
-        // 3. Fixed Upcoming Bills due between today and end of current month
-        const todayStr = now.toISOString().split("T")[0];
-        const endOfMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
-
+        // 3. Fixed Upcoming Bills due between today and end of current cycle
         const fixedUpcomingBills = recurring
           .filter(
             (r) =>
               r.type === "expense" &&
               r.status !== "paused" &&
               r.nextDueDate >= todayStr &&
-              r.nextDueDate <= endOfMonthStr,
+              r.nextDueDate <= cycle.endDate,
           )
           .reduce((sum, r) => sum + r.amount, 0);
 
-        // Formula: (Monthly Target Budget OR Monthly Income - Fixed Upcoming Bills - Month-to-Date Variable Expenses) / Remaining Days
+        // Formula: (Monthly Target Budget OR Income - Fixed Upcoming Bills - Cycle Variable Expenses) / Remaining Days
         const monthlyBase = monthlyBudgetTarget > 0 ? monthlyBudgetTarget : monthToDateIncome;
         const totalRemaining = monthlyBase - fixedUpcomingBills - monthToDateExpenses;
-        const dailyAllowance = Math.round(totalRemaining / remainingDays);
+        const dailyAllowance = Math.round(totalRemaining / cycle.remainingDays);
 
         // Status classification
         let status: "safe" | "caution" | "overpace" = "safe";
-        const benchmarkDaily = monthlyBase > 0 ? monthlyBase / daysInMonth : 0;
+        const benchmarkDaily = monthlyBase > 0 ? monthlyBase / cycle.totalDays : 0;
 
         if (totalRemaining <= 0 || dailyAllowance <= 0) {
           status = "overpace";
@@ -886,13 +879,17 @@ export const useStore = create<WealthState>()(
         return {
           dailyAllowance: Math.max(0, dailyAllowance),
           totalRemaining,
-          remainingDays,
-          daysInMonth,
-          currentDay,
+          remainingDays: cycle.remainingDays,
+          daysInMonth: cycle.totalDays,
+          currentDay: cycle.currentDayInCycle,
           status,
           monthlyBase,
           fixedUpcomingBills,
           monthToDateExpenses,
+          cycleLabel: cycle.cycleLabel,
+          cycleStartDate: cycle.startDate,
+          cycleEndDate: cycle.endDate,
+          monthStartsOnDay: cycle.startDay,
         };
       },
 

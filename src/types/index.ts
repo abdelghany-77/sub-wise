@@ -332,6 +332,10 @@ export interface SafeToSpendResult {
   monthlyBase: number;
   fixedUpcomingBills: number;
   monthToDateExpenses: number;
+  cycleLabel?: string;
+  cycleStartDate?: string;
+  cycleEndDate?: string;
+  monthStartsOnDay?: number;
 }
 
 export interface NetWorthBreakdown {

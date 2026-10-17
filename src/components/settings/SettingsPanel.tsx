@@ -1,9 +1,7 @@
 import { useState, useRef } from "react";
 import {
   Globe,
-  Calendar,
   Shield,
-  Info,
   Download,
   Upload,
   Trash2,
@@ -12,12 +10,14 @@ import {
   Target,
   Sliders,
   Database,
+  CalendarDays,
+  Sparkles,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { Select } from "../ui/FormFields";
 import { Button } from "../ui/Button";
-import { formatCurrency, cn } from "../../lib/utils";
+import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
 import type { Account, Transaction, Budget, SavingsGoal, RecurringBill, Iou } from "../../types";
 
 const CURRENCIES = [
@@ -34,6 +34,22 @@ const DATE_FORMATS = [
   { value: "DD/MM/YYYY", label: "DD/MM/YYYY (UK/EU)" },
   { value: "YYYY-MM-DD", label: "YYYY-MM-DD (ISO)" },
 ];
+
+const MONTH_START_DAYS = Array.from({ length: 31 }, (_, i) => {
+  const day = i + 1;
+  const suffix =
+    day === 1 || day === 21 || day === 31
+      ? "st"
+      : day === 2 || day === 22
+      ? "nd"
+      : day === 3 || day === 23
+      ? "rd"
+      : "th";
+  let label = `${day}${suffix} of every month`;
+  if (day === 1) label += " (Standard Calendar Month)";
+  if (day === 25 || day === 26 || day === 27 || day === 28) label += " (Common Payday)";
+  return { value: String(day), label };
+});
 
 export function SettingsPanel() {
   const {
@@ -57,6 +73,8 @@ export function SettingsPanel() {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<"general" | "budget" | "data">("general");
+
+  const currentCycle = getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1);
 
   // Budget target state
   const [budgetTargetInput, setBudgetTargetInput] = useState(
@@ -281,62 +299,76 @@ export function SettingsPanel() {
             </div>
           </Card>
 
-          {/* Calendar settings */}
-          <Card className="space-y-4">
+          {/* Financial Month & Calendar settings */}
+          <Card className="space-y-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
-                <Calendar size={18} />
+                <CalendarDays size={18} />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Calendar Behavior</h3>
-                <p className="text-xs text-white/40">Adjust starting day of week for analytics</p>
+                <h3 className="font-semibold text-white">Financial Month & Calendar</h3>
+                <p className="text-xs text-white/40">Align your budget cycles and Safe-to-Spend with your payday</p>
               </div>
             </div>
 
-            <Select
-              label="Week Starts On"
-              value={settings.weekStartsOn}
-              onChange={(e) =>
-                updateSettings({
-                  weekStartsOn: e.target.value as "sunday" | "monday" | "saturday",
-                })
-              }
-              options={[
-                { value: "saturday", label: "Saturday (Middle East / Egypt)" },
-                { value: "sunday", label: "Sunday" },
-                { value: "monday", label: "Monday (Standard)" },
-              ]}
-            />
-          </Card>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Financial Month Starts On"
+                value={String(settings.monthStartsOnDay ?? 1)}
+                onChange={(e) =>
+                  updateSettings({
+                    monthStartsOnDay: parseInt(e.target.value, 10) || 1,
+                  })
+                }
+                options={MONTH_START_DAYS}
+              />
 
-          {/* About App */}
-          <Card className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
-                <Info size={18} />
+              <Select
+                label="Week Starts On"
+                value={settings.weekStartsOn}
+                onChange={(e) =>
+                  updateSettings({
+                    weekStartsOn: e.target.value as "sunday" | "monday" | "saturday",
+                  })
+                }
+                options={[
+                  { value: "saturday", label: "Saturday (Middle East / Egypt)" },
+                  { value: "sunday", label: "Sunday" },
+                  { value: "monday", label: "Monday (Standard)" },
+                ]}
+              />
+            </div>
+
+            {/* Live Cycle Preview */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-blue-400" />
+                    Active Financial Cycle:
+                  </span>
+                  <span className="font-mono font-bold text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-md">
+                    {currentCycle.cycleLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/50">
+                  {settings.monthStartsOnDay && settings.monthStartsOnDay > 1
+                    ? `Your financial month begins on day ${settings.monthStartsOnDay}. All spending budgets and cashflow align with this salary window.`
+                    : "Standard calendar month cycle (1st to end of month)."}
+                </p>
               </div>
-              <div>
-                <h3 className="font-semibold text-white">Walleteer CFO Engine</h3>
-                <p className="text-xs text-white/40">Architecture & device storage status</p>
+
+              <div className="flex items-center gap-3 sm:border-l sm:border-white/10 sm:pl-4 flex-shrink-0">
+                <div className="text-left sm:text-right">
+                  <span className="block text-[10px] text-white/40 uppercase tracking-wider font-semibold">
+                    Next Payday
+                  </span>
+                  <span className="font-mono font-bold text-emerald-400 text-sm">
+                    {currentCycle.remainingDays} {currentCycle.remainingDays === 1 ? "day" : "days"} left
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-                <span className="text-white/40 block">Version</span>
-                <span className="font-mono font-bold text-white">v0.3.0</span>
-              </div>
-              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-                <span className="text-white/40 block">Storage</span>
-                <span className="font-medium text-emerald-400">Offline Local-First</span>
-              </div>
-              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-                <span className="text-white/40 block">PWA Support</span>
-                <span className="font-medium text-blue-400">Standalone App</span>
-              </div>
-            </div>
-            <p className="text-xs text-white/30 pt-2 border-t border-white/[0.04]">
-              All data is stored directly in your browser's private indexed storage. No servers, no tracking, zero telemetry.
-            </p>
           </Card>
         </div>
       )}
