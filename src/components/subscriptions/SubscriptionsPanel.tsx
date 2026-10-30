@@ -1,32 +1,134 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CalendarClock,
   Plus,
   CheckCircle2,
   Trash2,
-  Calendar,
   CreditCard,
   TrendingDown,
   TrendingUp,
-  Tag,
   Pencil,
   Pause,
   Play,
   AlertCircle,
-  Clock,
+  Repeat,
+  Scale,
+  FilterX,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
-import { formatCurrency, formatDate, cn } from "../../lib/utils";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { Input, Select } from "../ui/FormFields";
+import { formatCurrency, parseLocalDate, cn } from "../../lib/utils";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "../../types";
 import type { RecurringBill } from "../../types";
+
+type TypeFilter = "all" | "expense" | "income";
+type StatusFilter = "all" | "active" | "paused";
+type BillStatus = "active" | "paused";
+
+const DAY_MS = 864e5;
+
+const toLocalISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const formatDueDate = (dateStr: string) => {
+  const date = parseLocalDate(dateStr);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== new Date().getFullYear()
+      ? { year: "numeric" }
+      : {}),
+  });
+};
+
+const iconBtn =
+  "inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-lg border transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50";
+
+const chipBase =
+  "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50";
+
+interface DueInfo {
+  label: string;
+  badgeClass: string;
+  days: number;
+  urgent: boolean;
+  isOverdue: boolean;
+}
+
+function getDueInfo(dueDate: string, status: BillStatus, today: Date): DueInfo {
+  const days = Math.round(
+    (parseLocalDate(dueDate).getTime() - today.getTime()) / DAY_MS,
+  );
+
+  if (status === "paused") {
+    return {
+      label: "Paused",
+      badgeClass: "bg-white/[0.06] text-white/50 border-white/10",
+      days,
+      urgent: false,
+      isOverdue: false,
+    };
+  }
+  if (days < 0) {
+    return {
+      label: `Overdue ${Math.abs(days)}d`,
+      badgeClass: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+      days,
+      urgent: true,
+      isOverdue: true,
+    };
+  }
+  if (days === 0) {
+    return {
+      label: "Due today",
+      badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/35",
+      days,
+      urgent: true,
+      isOverdue: false,
+    };
+  }
+  if (days === 1) {
+    return {
+      label: "Tomorrow",
+      badgeClass: "bg-amber-500/15 text-amber-300 border-amber-500/25",
+      days,
+      urgent: true,
+      isOverdue: false,
+    };
+  }
+  if (days <= 7) {
+    return {
+      label: `In ${days} days`,
+      badgeClass: "bg-blue-500/15 text-blue-300 border-blue-500/25",
+      days,
+      urgent: false,
+      isOverdue: false,
+    };
+  }
+  return {
+    label: `In ${days} days`,
+    badgeClass: "bg-white/[0.05] text-white/55 border-white/10",
+    days,
+    urgent: false,
+    isOverdue: false,
+  };
+}
 
 export function SubscriptionsPanel() {
   const {
     recurring,
     accounts,
+    exchangeRates,
     addRecurringBill,
     updateRecurring,
     toggleRecurringStatus,
@@ -37,20 +139,26 @@ export function SubscriptionsPanel() {
 
   const [showModal, setShowModal] = useState(false);
   const [editingBill, setEditingBill] = useState<RecurringBill | null>(null);
-  const [filterType, setFilterType] = useState<"all" | "expense" | "income">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all");
+  const [deleteTarget, setDeleteTarget] = useState<RecurringBill | null>(null);
+  const [filterType, setFilterType] = useState<TypeFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   // Form State
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [frequency, setFrequency] = useState<"monthly" | "yearly">("monthly");
   const [type, setType] = useState<"expense" | "income">("expense");
-  const [category, setCategory] = useState(EXPENSE_CATEGORIES[0] as string);
-  const [nextDueDate, setNextDueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
+  const [nextDueDate, setNextDueDate] = useState(() => toLocalISO(new Date()));
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
-  const [status, setStatus] = useState<"active" | "paused">("active");
+  const [status, setStatus] = useState<BillStatus>("active");
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const blur = privacyMode && "privacy-blur";
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingBill(null);
+  };
 
   const openAddModal = () => {
     setEditingBill(null);
@@ -59,7 +167,7 @@ export function SubscriptionsPanel() {
     setFrequency("monthly");
     setType("expense");
     setCategory(EXPENSE_CATEGORIES[0]);
-    setNextDueDate(new Date().toISOString().split("T")[0]);
+    setNextDueDate(toLocalISO(new Date()));
     setAccountId(accounts[0]?.id || "");
     setStatus("active");
     setShowModal(true);
@@ -73,431 +181,546 @@ export function SubscriptionsPanel() {
     setType(bill.type);
     setCategory(bill.category);
     setNextDueDate(bill.nextDueDate);
-    setAccountId(bill.accountId);
+    setAccountId(
+      accounts.some((a) => a.id === bill.accountId)
+        ? bill.accountId
+        : accounts[0]?.id || "",
+    );
     setStatus(bill.status ?? "active");
     setShowModal(true);
+  };
+
+  const switchType = (next: "expense" | "income") => {
+    setType(next);
+    const list: readonly string[] =
+      next === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    if (!list.includes(category)) setCategory(list[0]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
-    if (!name.trim() || isNaN(parsedAmount) || parsedAmount <= 0 || !accountId) return;
+    if (
+      !name.trim() ||
+      isNaN(parsedAmount) ||
+      parsedAmount <= 0 ||
+      !accountId ||
+      !nextDueDate
+    ) {
+      return;
+    }
+
+    const payload = {
+      name: name.trim(),
+      amount: parsedAmount,
+      frequency,
+      type,
+      category,
+      nextDueDate,
+      accountId,
+      status,
+    };
 
     if (editingBill) {
-      updateRecurring(editingBill.id, {
-        name: name.trim(),
-        amount: parsedAmount,
-        frequency,
-        type,
-        category,
-        nextDueDate,
-        accountId,
-        status,
-      });
+      updateRecurring(editingBill.id, payload);
     } else {
-      addRecurringBill({
-        name: name.trim(),
-        amount: parsedAmount,
-        frequency,
-        type,
-        category,
-        nextDueDate,
-        accountId,
-        status,
-      });
+      addRecurringBill(payload);
     }
-
-    setShowModal(false);
-    setEditingBill(null);
+    closeModal();
   };
 
-  // Status helper: Returns pill style & text
-  const getDueStatus = (dueDate: string, billStatus: "active" | "paused" = "active") => {
-    if (billStatus === "paused") {
-      return {
-        label: "Paused",
-        badgeClass: "bg-white/[0.08] text-white/50 border-white/10",
-        urgent: false,
-        isOverdue: false,
-      };
-    }
+  const today = startOfToday();
+  const todayKey = today.getTime();
 
-    const diffDays = Math.ceil(
-      (new Date(dueDate).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24),
+  const rateFor = (accId: string) => {
+    const currency = accounts.find((a) => a.id === accId)?.currency;
+    if (!currency || currency === "EGP") return 1;
+    return exchangeRates[currency] ?? 1;
+  };
+
+  const monthlyEgp = (bill: RecurringBill) =>
+    (bill.frequency === "monthly" ? bill.amount : bill.amount / 12) *
+    rateFor(bill.accountId);
+
+  const stats = useMemo(() => {
+    const t = new Date(todayKey);
+    const active = recurring.filter((r) => (r.status ?? "active") === "active");
+    const activeExpenses = active.filter((r) => r.type === "expense");
+    const activeIncome = active.filter((r) => r.type === "income");
+    const outflow = activeExpenses.reduce((s, r) => s + monthlyEgp(r), 0);
+    const inflow = activeIncome.reduce((s, r) => s + monthlyEgp(r), 0);
+
+    const dueSoon = activeExpenses.filter(
+      (r) => getDueInfo(r.nextDueDate, "active", t).days <= 7,
+    );
+    const overdue = dueSoon.filter(
+      (r) => getDueInfo(r.nextDueDate, "active", t).days < 0,
+    );
+    const dueSoonTotal = dueSoon.reduce(
+      (s, r) => s + r.amount * rateFor(r.accountId),
+      0,
     );
 
-    if (diffDays < 0) {
-      return {
-        label: `Overdue (${Math.abs(diffDays)}d)`,
-        badgeClass: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-        urgent: true,
-        isOverdue: true,
-      };
-    }
-    if (diffDays === 0) {
-      return {
-        label: "Due Today",
-        badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse",
-        urgent: true,
-        isOverdue: false,
-      };
-    }
-    if (diffDays === 1) {
-      return {
-        label: "Due Tomorrow",
-        badgeClass: "bg-amber-500/15 text-amber-300 border-amber-500/25",
-        urgent: true,
-        isOverdue: false,
-      };
-    }
-    if (diffDays <= 7) {
-      return {
-        label: `Due in ${diffDays} days`,
-        badgeClass: "bg-blue-500/15 text-blue-300 border-blue-500/25",
-        urgent: false,
-        isOverdue: false,
-      };
-    }
     return {
-      label: `Due in ${diffDays} days`,
-      badgeClass: "bg-white/[0.05] text-white/60 border-white/10",
-      urgent: false,
-      isOverdue: false,
+      outflow,
+      inflow,
+      net: inflow - outflow,
+      expenseCount: activeExpenses.length,
+      incomeCount: activeIncome.length,
+      dueSoonCount: dueSoon.length,
+      overdueCount: overdue.length,
+      dueSoonTotal,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recurring, accounts, exchangeRates, todayKey]);
+
+  const typeCounts = {
+    all: recurring.length,
+    expense: recurring.filter((r) => r.type === "expense").length,
+    income: recurring.filter((r) => r.type === "income").length,
   };
 
-  // Summary Metrics (active only)
-  const activeBills = recurring.filter((r) => (r.status ?? "active") === "active");
+  const filteredBills = useMemo(() => {
+    return recurring
+      .filter((r) => {
+        if (filterType !== "all" && r.type !== filterType) return false;
+        if (statusFilter !== "all" && (r.status ?? "active") !== statusFilter)
+          return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const aPaused = (a.status ?? "active") === "paused" ? 1 : 0;
+        const bPaused = (b.status ?? "active") === "paused" ? 1 : 0;
+        if (aPaused !== bPaused) return aPaused - bPaused;
+        return a.nextDueDate.localeCompare(b.nextDueDate);
+      });
+  }, [recurring, filterType, statusFilter]);
 
-  const monthlyExpenses = activeBills
-    .filter((r) => r.type === "expense")
-    .reduce((sum, r) => sum + (r.frequency === "monthly" ? r.amount : r.amount / 12), 0);
+  const hasFilters = filterType !== "all" || statusFilter !== "all";
+  const clearFilters = () => {
+    setFilterType("all");
+    setStatusFilter("all");
+  };
 
-  const monthlyIncome = activeBills
-    .filter((r) => r.type === "income")
-    .reduce((sum, r) => sum + (r.frequency === "monthly" ? r.amount : r.amount / 12), 0);
-
-  const upcoming7Days = activeBills.filter((r) => {
-    const in7 = new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0];
-    return r.type === "expense" && r.nextDueDate >= todayStr && r.nextDueDate <= in7;
-  });
-
-  const filteredBills = recurring.filter((r) => {
-    if (filterType !== "all" && r.type !== filterType) return false;
-    const rStatus = r.status ?? "active";
-    if (statusFilter !== "all" && rStatus !== statusFilter) return false;
-    return true;
-  });
+  const netPositive = stats.net >= 0;
+  const categoryOptions = (
+    type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES
+  ) as readonly string[];
+  const categoryList = categoryOptions.includes(category)
+    ? categoryOptions
+    : [category, ...categoryOptions];
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner / Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <span>Subscriptions & Recurring Bills</span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20">
-              {recurring.length} items
+    <div className="space-y-3">
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <Card padding="sm" className="!p-3 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="stat-label text-[10px] tracking-wider truncate">
+              Outflow / mo
             </span>
-          </h2>
-          <p className="text-xs sm:text-sm text-white/50 mt-1">
-            Track fixed expenses, utilities, memberships, and automated salary streams.
+            <TrendingDown size={14} className="text-rose-400 flex-shrink-0" />
+          </div>
+          <p
+            className={cn(
+              "text-base sm:text-lg font-bold font-mono tabular-nums text-rose-400 mt-1 truncate",
+              blur,
+            )}
+          >
+            {formatCurrency(stats.outflow, "EGP")}
           </p>
+          <p className="text-[11px] text-white/40 truncate">
+            {stats.expenseCount} active ·{" "}
+            <span className={blur || undefined}>
+              {formatCurrency(stats.outflow * 12, "EGP")}
+            </span>{" "}
+            / yr
+          </p>
+        </Card>
+
+        <Card padding="sm" className="!p-3 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="stat-label text-[10px] tracking-wider truncate">
+              Inflow / mo
+            </span>
+            <TrendingUp size={14} className="text-emerald-400 flex-shrink-0" />
+          </div>
+          <p
+            className={cn(
+              "text-base sm:text-lg font-bold font-mono tabular-nums text-emerald-400 mt-1 truncate",
+              blur,
+            )}
+          >
+            {formatCurrency(stats.inflow, "EGP")}
+          </p>
+          <p className="text-[11px] text-white/40 truncate">
+            {stats.incomeCount} active stream
+            {stats.incomeCount === 1 ? "" : "s"}
+          </p>
+        </Card>
+
+        <Card padding="sm" className="!p-3 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="stat-label text-[10px] tracking-wider truncate">
+              Net / mo
+            </span>
+            <Scale size={14} className="text-white/40 flex-shrink-0" />
+          </div>
+          <p
+            className={cn(
+              "text-base sm:text-lg font-bold font-mono tabular-nums mt-1 truncate",
+              netPositive ? "text-emerald-400" : "text-rose-400",
+              blur,
+            )}
+          >
+            {netPositive ? "+" : "-"}
+            {formatCurrency(stats.net, "EGP")}
+          </p>
+          <p className="text-[11px] text-white/40 truncate">
+            Recurring inflow − outflow
+          </p>
+        </Card>
+
+        <Card
+          padding="sm"
+          className={cn(
+            "!p-3 min-w-0",
+            stats.overdueCount > 0
+              ? "border-rose-500/30"
+              : stats.dueSoonCount > 0
+                ? "border-amber-500/25"
+                : "",
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="stat-label text-[10px] tracking-wider truncate text-amber-300/90">
+              Due ≤ 7 days
+            </span>
+            <CalendarClock size={14} className="text-amber-400 flex-shrink-0" />
+          </div>
+          <p className="text-base sm:text-lg font-bold font-mono tabular-nums text-white mt-1 truncate">
+            {stats.dueSoonCount}
+            <span className="text-xs text-white/40 font-normal">
+              {" "}
+              bill{stats.dueSoonCount === 1 ? "" : "s"}
+            </span>
+            {stats.overdueCount > 0 && (
+              <span className="text-xs text-rose-400 font-semibold">
+                {" "}
+                · {stats.overdueCount} overdue
+              </span>
+            )}
+          </p>
+          <p className={cn("text-[11px] text-amber-400/80 truncate", blur)}>
+            {formatCurrency(stats.dueSoonTotal, "EGP")}
+          </p>
+        </Card>
+      </div>
+
+      {/* Toolbar: filter chips + add */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="Filter by type"
+          className="inline-flex items-center gap-0.5 bg-white/[0.03] p-0.5 rounded-xl border border-white/[0.06]"
+        >
+          {(
+            [
+              ["all", "All"],
+              ["expense", "Bills"],
+              ["income", "Income"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={filterType === key}
+              onClick={() => setFilterType(key)}
+              className={cn(
+                chipBase,
+                filterType === key
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-white/50 hover:text-white hover:bg-white/[0.06]",
+              )}
+            >
+              {label}
+              <span
+                className={cn(
+                  "font-mono text-[10px]",
+                  filterType === key ? "text-white/80" : "text-white/35",
+                )}
+              >
+                {typeCounts[key]}
+              </span>
+            </button>
+          ))}
         </div>
+
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="inline-flex items-center gap-0.5 bg-white/[0.03] p-0.5 rounded-xl border border-white/[0.06]"
+        >
+          {(
+            [
+              ["all", "Any status"],
+              ["active", "Active"],
+              ["paused", "Paused"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={statusFilter === key}
+              onClick={() => setStatusFilter(key)}
+              className={cn(
+                chipBase,
+                statusFilter === key
+                  ? "bg-white/[0.12] text-white"
+                  : "text-white/45 hover:text-white hover:bg-white/[0.06]",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className={cn(chipBase, "text-white/50 hover:text-white")}
+          >
+            <FilterX size={13} />
+            Clear
+          </button>
+        )}
 
         <Button
           onClick={openAddModal}
-          className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2 self-start sm:self-auto shadow-lg shadow-blue-600/20 border border-blue-400/20"
+          size="sm"
+          icon={<Plus size={15} />}
+          className="ml-auto bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20 shadow-lg shadow-blue-600/20"
         >
-          <Plus size={16} />
-          <span>Add Recurring Bill</span>
+          Add bill
         </Button>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Total Monthly Commitments */}
-        <Card className="p-4 sm:p-5 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="stat-label">Active Monthly Outflow</span>
-            <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center">
-              <TrendingDown size={17} />
-            </div>
-          </div>
-          <p
-            className={cn(
-              "stat-value text-2xl font-bold text-rose-400 mt-2 font-mono tabular-nums",
-              privacyMode && "privacy-blur",
-            )}
-          >
-            {formatCurrency(monthlyExpenses, "EGP")}
-            <span className="text-xs text-white/40 font-normal"> / mo</span>
-          </p>
-          <p className="text-[11px] text-white/40 mt-1">
-            Annualized: {formatCurrency(monthlyExpenses * 12, "EGP")}
-          </p>
-        </Card>
-
-        {/* Monthly Recurring Income */}
-        <Card className="p-4 sm:p-5 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="stat-label">Fixed Recurring Inflow</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
-              <TrendingUp size={17} />
-            </div>
-          </div>
-          <p
-            className={cn(
-              "stat-value text-2xl font-bold text-emerald-400 mt-2 font-mono tabular-nums",
-              privacyMode && "privacy-blur",
-            )}
-          >
-            {formatCurrency(monthlyIncome, "EGP")}
-            <span className="text-xs text-white/40 font-normal"> / mo</span>
-          </p>
-          <p className="text-[11px] text-white/40 mt-1">
-            Salaries & steady contract retainers
-          </p>
-        </Card>
-
-        {/* Next 7 Days Attention */}
-        <Card className="p-4 sm:p-5 relative overflow-hidden border-amber-500/20">
-          <div className="flex items-center justify-between">
-            <span className="stat-label text-amber-300">Due in Next 7 Days</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <CalendarClock size={17} />
-            </div>
-          </div>
-          <p className="stat-value text-2xl font-bold text-white mt-2 font-mono">
-            {upcoming7Days.length}{" "}
-            <span className="text-xs text-white/40 font-normal">bills pending</span>
-          </p>
-          <p className="text-[11px] text-amber-400/80 mt-1">
-            Totaling {formatCurrency(upcoming7Days.reduce((s, b) => s + b.amount, 0), "EGP")}
-          </p>
-        </Card>
-      </div>
-
-      {/* Filter Tabs Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
-        {/* Type Filter */}
-        <div className="flex items-center gap-1.5 bg-white/[0.03] p-1 rounded-xl border border-white/[0.06]">
-          {(["all", "expense", "income"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setFilterType(t)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all",
-                filterType === t
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-white/45 hover:text-white/80",
-              )}
-            >
-              {t === "all" ? "All Commitments" : t === "expense" ? "Expenses & Bills" : "Income"}
-            </button>
-          ))}
-        </div>
-
-        {/* Status Filter */}
-        <div className="flex items-center gap-1.5 bg-white/[0.03] p-1 rounded-xl border border-white/[0.06]">
-          {(["all", "active", "paused"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={cn(
-                "px-2.5 py-1.5 rounded-lg text-xs font-medium capitalize transition-all",
-                statusFilter === s
-                  ? "bg-white/10 text-white border border-white/10"
-                  : "text-white/40 hover:text-white/70",
-              )}
-            >
-              {s === "all" ? "All Status" : s === "active" ? "Active" : "Paused"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Commitments List / Cards */}
+      {/* List */}
       {filteredBills.length === 0 ? (
-        <Card className="text-center py-14 p-6">
-          <CalendarClock size={36} className="mx-auto text-white/20 mb-3" />
-          <h3 className="text-base font-semibold text-white">No commitments found</h3>
+        <Card className="text-center !py-10">
+          <CalendarClock size={32} className="mx-auto text-white/20 mb-2" />
+          <h3 className="text-sm font-semibold text-white">
+            {recurring.length === 0
+              ? "No recurring bills yet"
+              : "Nothing matches these filters"}
+          </h3>
           <p className="text-xs text-white/40 max-w-sm mx-auto mt-1 mb-4">
-            Add recurring subscriptions like Fiber Internet, Gym, Netflix, or recurring salary to stay in full control.
+            {recurring.length === 0
+              ? "Add subscriptions like internet, gym or Netflix, or a recurring salary, to see what's due and what it costs per month."
+              : "Try a different type or status to see more of your recurring items."}
           </p>
-          <Button
-            onClick={openAddModal}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-xs mx-auto"
-          >
-            <Plus size={14} className="mr-1.5" />
-            Add First Item
-          </Button>
+          {recurring.length === 0 ? (
+            <Button
+              onClick={openAddModal}
+              size="sm"
+              icon={<Plus size={14} />}
+              className="bg-blue-600 hover:bg-blue-500 text-white mx-auto"
+            >
+              Add first bill
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              icon={<FilterX size={14} />}
+              className="mx-auto"
+            >
+              Clear filters
+            </Button>
+          )}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
           {filteredBills.map((bill) => {
             const account = accounts.find((a) => a.id === bill.accountId);
-            const billStatus = bill.status ?? "active";
+            const currency = account?.currency || "EGP";
+            const billStatus: BillStatus = bill.status ?? "active";
             const isPaused = billStatus === "paused";
-            const statusInfo = getDueStatus(bill.nextDueDate, billStatus);
+            const isIncome = bill.type === "income";
+            const due = getDueInfo(bill.nextDueDate, billStatus, today);
 
             return (
               <div
                 key={bill.id}
                 className={cn(
-                  "glass-card p-5 rounded-2xl flex flex-col justify-between gap-4 transition-all duration-200 border relative overflow-hidden group",
+                  "glass-card rounded-2xl p-3 flex flex-col gap-2.5 border transition-colors duration-200 animate-fade-in",
                   isPaused
-                    ? "opacity-60 border-white/[0.05] bg-white/[0.01]"
-                    : statusInfo.isOverdue
-                      ? "border-rose-500/30 bg-[#1a1215]"
-                      : statusInfo.urgent
-                        ? "border-amber-500/30 bg-[#161722]"
+                    ? "border-white/[0.05] opacity-70"
+                    : due.isOverdue
+                      ? "border-rose-500/30 bg-rose-500/[0.04]"
+                      : due.urgent
+                        ? "border-amber-500/30"
                         : "border-white/[0.08] hover:border-white/20",
                 )}
               >
-                {/* 1. Header: Icon, Name, Category/Frequency, Status Pill */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div
-                      className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold mt-0.5",
-                        isPaused
-                          ? "bg-white/[0.05] text-white/40 border border-white/10"
-                          : bill.type === "income"
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                            : "bg-rose-500/15 text-rose-400 border border-rose-500/30",
-                      )}
-                    >
-                      {bill.type === "income" ? (
-                        <TrendingUp size={18} />
-                      ) : statusInfo.isOverdue ? (
-                        <AlertCircle size={18} />
-                      ) : (
-                        <TrendingDown size={18} />
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm sm:text-base font-bold text-white truncate" title={bill.name}>
-                          {bill.name}
-                        </h4>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1 flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <Tag size={11} className="text-white/40" />
-                          <span>{bill.category}</span>
-                        </span>
-                        <span>•</span>
-                        <span className="capitalize font-medium text-white/60">
-                          {bill.frequency}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Status Pill in Header */}
-                  <span
+                <div className="flex items-start gap-3">
+                  <div
                     className={cn(
-                      "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex-shrink-0 flex items-center gap-1",
-                      statusInfo.badgeClass,
+                      "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border",
+                      isPaused
+                        ? "bg-white/[0.05] text-white/40 border-white/10"
+                        : isIncome
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : due.isOverdue
+                            ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                            : "bg-blue-500/15 text-blue-400 border-blue-500/25",
                     )}
                   >
-                    {isPaused && <Clock size={11} />}
-                    <span>{statusInfo.label}</span>
-                  </span>
-                </div>
+                    {isIncome ? (
+                      <TrendingUp size={16} />
+                    ) : due.isOverdue ? (
+                      <AlertCircle size={16} />
+                    ) : (
+                      <Repeat size={16} />
+                    )}
+                  </div>
 
-                {/* 2. Middle Section: Large tabular-nums amount + Linked Account badge */}
-                <div className="flex items-end justify-between gap-3 pt-2">
-                  <div>
-                    <span className="text-[10px] text-white/40 uppercase font-medium tracking-wider block">
-                      {bill.type === "income" ? "Recurring Inflow" : "Recurring Outflow"}
-                    </span>
-                    <p
-                      className={cn(
-                        "text-2xl sm:text-3xl font-black font-mono tracking-tight tabular-nums mt-0.5",
-                        isPaused
-                          ? "text-white/40"
-                          : bill.type === "income"
-                            ? "text-emerald-400"
-                            : "text-white",
-                        privacyMode && "privacy-blur",
-                      )}
+                  <div className="min-w-0 flex-1">
+                    <h4
+                      className="text-sm font-semibold text-white truncate"
+                      title={bill.name}
                     >
-                      {bill.type === "income" ? "+" : "-"}
-                      {formatCurrency(bill.amount, account?.currency || "EGP")}
+                      {bill.name}
+                    </h4>
+                    <p className="text-[11px] text-white/45 truncate flex items-center gap-1">
+                      <span className="truncate">{bill.category}</span>
+                      <span aria-hidden>·</span>
+                      <span className="capitalize flex-shrink-0">
+                        {bill.frequency}
+                      </span>
+                      <span aria-hidden>·</span>
+                      <CreditCard
+                        size={10}
+                        className="text-white/35 flex-shrink-0"
+                        aria-hidden
+                      />
+                      <span className="truncate">
+                        {account?.name || "No account"}
+                      </span>
                     </p>
                   </div>
 
-                  {/* Linked Account Pill */}
-                  <div className="text-right">
-                    <span className="text-[10px] text-white/40 block mb-0.5">Account</span>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.05] border border-white/[0.08] text-xs font-medium text-white/70">
-                      <CreditCard size={12} className="text-blue-400" />
-                      <span className="truncate max-w-[120px]">{account?.name || "Account"}</span>
-                    </div>
+                  <div className="text-right flex-shrink-0">
+                    <p
+                      className={cn(
+                        "text-sm sm:text-base font-bold font-mono tabular-nums leading-tight",
+                        isPaused
+                          ? "text-white/40"
+                          : isIncome
+                            ? "text-emerald-400"
+                            : "text-white",
+                        blur,
+                      )}
+                    >
+                      {isIncome ? "+" : "-"}
+                      {formatCurrency(bill.amount, currency)}
+                    </p>
+                    {bill.frequency === "yearly" && (
+                      <p
+                        className={cn(
+                          "text-[10px] text-white/40 font-mono",
+                          blur,
+                        )}
+                      >
+                        ≈ {formatCurrency(bill.amount / 12, currency)} / mo
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* 3. Footer / Action Bar */}
-                <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/[0.06]">
-                  {/* Next Due Date */}
-                  <div className="flex items-center gap-1.5 text-xs text-white/50">
-                    <Calendar size={13} className="text-white/40" />
-                    <span>Next:</span>
-                    <span className="font-mono text-white/80 font-medium">
-                      {formatDate(bill.nextDueDate)}
+                <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-white/[0.06]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap",
+                        due.badgeClass,
+                      )}
+                    >
+                      {due.label}
+                    </span>
+                    <span className="text-[11px] text-white/45 font-mono truncate">
+                      {formatDueDate(bill.nextDueDate)}
                     </span>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-1.5">
-                    {/* Mark Paid button */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
+                      type="button"
                       onClick={() => markBillAsPaid(bill.id)}
                       disabled={isPaused}
+                      aria-label={
+                        isIncome
+                          ? `Mark ${bill.name} as received`
+                          : `Mark ${bill.name} as paid`
+                      }
+                      title={
+                        isPaused
+                          ? "Resume to log a payment"
+                          : "Log the transaction and move the due date to the next cycle"
+                      }
                       className={cn(
-                        "px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border",
+                        iconBtn,
+                        "w-auto px-2.5 gap-1.5 text-xs font-semibold",
                         isPaused
                           ? "opacity-40 cursor-not-allowed bg-white/[0.03] text-white/40 border-white/5"
-                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30 active:scale-95 shadow-sm",
+                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30",
                       )}
-                      title="Log payment into account and roll next due date by 1 cycle"
                     >
-                      <CheckCircle2 size={13} />
-                      <span>Mark Paid</span>
+                      <CheckCircle2 size={14} />
+                      <span>{isIncome ? "Received" : "Paid"}</span>
                     </button>
 
-                    {/* Edit button */}
                     <button
+                      type="button"
                       onClick={() => openEditModal(bill)}
-                      className="p-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white border border-white/10 transition-colors"
-                      title="Edit Subscription Details"
+                      aria-label={`Edit ${bill.name}`}
+                      title="Edit"
+                      className={cn(
+                        iconBtn,
+                        "bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white border-white/10",
+                      )}
                     >
                       <Pencil size={14} />
                     </button>
 
-                    {/* Pause / Resume Button */}
                     <button
+                      type="button"
                       onClick={() => toggleRecurringStatus(bill.id)}
+                      aria-label={
+                        isPaused ? `Resume ${bill.name}` : `Pause ${bill.name}`
+                      }
+                      title={isPaused ? "Resume" : "Pause"}
                       className={cn(
-                        "p-1.5 rounded-xl border transition-colors",
+                        iconBtn,
                         isPaused
                           ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30"
-                          : "bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white border border-white/10",
+                          : "bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white border-white/10",
                       )}
-                      title={isPaused ? "Resume Subscription" : "Pause Subscription"}
                     >
                       {isPaused ? <Play size={14} /> : <Pause size={14} />}
                     </button>
 
-                    {/* Delete button */}
                     <button
-                      onClick={() => deleteRecurringBill(bill.id)}
-                      className="p-1.5 rounded-xl bg-white/[0.05] hover:bg-rose-500/20 text-white/40 hover:text-rose-400 border border-white/10 transition-colors"
-                      title="Delete Subscription"
+                      type="button"
+                      onClick={() => setDeleteTarget(bill)}
+                      aria-label={`Delete ${bill.name}`}
+                      title="Delete"
+                      className={cn(
+                        iconBtn,
+                        "bg-white/[0.05] hover:bg-rose-500/20 text-white/40 hover:text-rose-400 border-white/10",
+                      )}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -509,27 +732,34 @@ export function SubscriptionsPanel() {
         </div>
       )}
 
-      {/* Add / Edit Subscription Modal */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteRecurringBill(deleteTarget.id);
+        }}
+        title="Delete recurring bill?"
+        message={
+          deleteTarget
+            ? `"${deleteTarget.name}" will be removed. Past transactions already logged for it are kept.`
+            : ""
+        }
+      />
+
       {showModal && (
         <Modal
           isOpen={showModal}
-          onClose={() => {
-            setShowModal(false);
-            setEditingBill(null);
-          }}
-          title={editingBill ? `Edit Commitment · ${editingBill.name}` : "Add Recurring Commitment"}
+          onClose={closeModal}
+          title={
+            editingBill ? `Edit · ${editingBill.name}` : "Add recurring bill"
+          }
         >
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Type selector */}
             <div className="grid grid-cols-2 gap-2 bg-white/[0.05] p-1 rounded-xl">
               <button
                 type="button"
-                onClick={() => {
-                  setType("expense");
-                  if (!EXPENSE_CATEGORIES.includes(category as any)) {
-                    setCategory(EXPENSE_CATEGORIES[0]);
-                  }
-                }}
+                aria-pressed={type === "expense"}
+                onClick={() => switchType("expense")}
                 className={cn(
                   "py-2 rounded-lg text-xs font-semibold transition-all",
                   type === "expense"
@@ -541,12 +771,8 @@ export function SubscriptionsPanel() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setType("income");
-                  if (!INCOME_CATEGORIES.includes(category as any)) {
-                    setCategory(INCOME_CATEGORIES[0]);
-                  }
-                }}
+                aria-pressed={type === "income"}
+                onClick={() => switchType("income")}
                 className={cn(
                   "py-2 rounded-lg text-xs font-semibold transition-all",
                   type === "income"
@@ -558,121 +784,98 @@ export function SubscriptionsPanel() {
               </button>
             </div>
 
-            {/* Name */}
-            <div>
-              <label className="label-base">Commitment Name</label>
-              <input
-                type="text"
+            <Input
+              label="Name"
+              type="text"
+              required
+              placeholder="e.g. Fiber Internet, Gym Membership, Netflix"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Amount"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0.01"
                 required
-                placeholder="e.g. Fiber Internet, Gym Membership, Netflix"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="input-base"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="font-mono font-bold"
+              />
+              <Select
+                label="Frequency"
+                value={frequency}
+                onChange={(e) =>
+                  setFrequency(e.target.value as "monthly" | "yearly")
+                }
+                options={[
+                  { value: "monthly", label: "Monthly" },
+                  { value: "yearly", label: "Yearly" },
+                ]}
               />
             </div>
 
-            {/* Amount & Frequency */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label-base">Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="input-base font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="label-base">Frequency</label>
-                <select
-                  value={frequency}
-                  onChange={(e) => setFrequency(e.target.value as "monthly" | "yearly")}
-                  className="input-base [&>option]:bg-[#111827]"
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
+              <Select
+                label="Category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                options={categoryList.map((c) => ({ value: c, label: c }))}
+              />
+              <Select
+                label={
+                  type === "expense" ? "Pay from account" : "Deposit to account"
+                }
+                value={accountId}
+                required
+                onChange={(e) => setAccountId(e.target.value)}
+                options={accounts.map((a) => ({
+                  value: a.id,
+                  label: `${a.name} (${a.currency})`,
+                }))}
+              />
             </div>
 
-            {/* Category & Account */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label-base">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="input-base [&>option]:bg-[#111827]"
-                >
-                  {(type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label-base">Debit / Credit Account</label>
-                <select
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="input-base [&>option]:bg-[#111827]"
-                  required
-                >
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.currency})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Input
+                label="Next due date"
+                type="date"
+                required
+                value={nextDueDate}
+                onChange={(e) => setNextDueDate(e.target.value)}
+              />
+              <Select
+                label="Status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as BillStatus)}
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "paused", label: "Paused" },
+                ]}
+              />
             </div>
 
-            {/* Next Due Date & Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label-base">Next Due Date</label>
-                <input
-                  type="date"
-                  required
-                  value={nextDueDate}
-                  onChange={(e) => setNextDueDate(e.target.value)}
-                  className="input-base"
-                />
-              </div>
-
-              <div>
-                <label className="label-base">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as "active" | "paused")}
-                  className="input-base [&>option]:bg-[#111827]"
-                >
-                  <option value="active">Active (Processing & Alerts)</option>
-                  <option value="paused">Paused (Suspended)</option>
-                </select>
-              </div>
-            </div>
+            {accounts.length === 0 && (
+              <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                Create an account first, then you can attach recurring bills to
+                it.
+              </p>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.08]">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowModal(false);
-                  setEditingBill(null);
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={closeModal}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white">
-                {editingBill ? "Save Changes" : "Create Commitment"}
+              <Button
+                type="submit"
+                disabled={accounts.length === 0}
+                className="bg-blue-600 hover:bg-blue-500 text-white"
+              >
+                {editingBill ? "Save changes" : "Add bill"}
               </Button>
             </div>
           </form>

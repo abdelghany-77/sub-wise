@@ -1,35 +1,31 @@
 import { useState, useMemo, useEffect } from "react";
-import { ConfirmDialog } from "../ui/ConfirmDialog";
 import {
-  Trash2,
-  Pencil,
-  Copy,
-  ArrowDownLeft,
-  ArrowUpRight,
-  ArrowLeftRight,
   Search,
-  Filter,
-  ArrowUpDown,
-  Calendar,
+  SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Download,
   RotateCcw,
+  ReceiptText,
+  Repeat,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Scale,
+  X,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { useToastStore } from "../../store/useToastStore";
-import { Card } from "../ui/Card";
-import { formatCurrency, formatDate, todayISO } from "../../lib/utils";
+import { cn, formatCurrency, formatDayLabel } from "../../lib/utils";
 import type { Transaction } from "../../types";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "../../types";
+import { TransactionDetailModal } from "./TransactionDetailModal";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  CATEGORY_COLORS,
-} from "../../types";
-import { cn } from "../../lib/utils";
-import { AddTransactionModal } from "./AddTransactionModal";
+  TX_TYPE_META,
+  getCategoryColor,
+  getCategoryIcon,
+} from "./transactionMeta";
 
 const ALL_CATEGORIES = [
   "All",
@@ -40,36 +36,39 @@ const ALL_CATEGORIES = [
 
 type SortField = "date" | "amount" | "category";
 type SortDir = "asc" | "desc";
+type TypeFilter = "all" | "income" | "expense" | "transfer";
+
+const TYPE_TABS: { id: TypeFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "income", label: "Income" },
+  { id: "expense", label: "Expenses" },
+  { id: "transfer", label: "Transfers" },
+];
+
+const toISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function TransactionHistory() {
-  const {
-    transactions,
-    accounts,
-    deleteTransaction,
-    addTransaction,
-    getAccountById,
-    recordBackup,
-    privacyMode,
-  } = useStore();
+  const { transactions, accounts, getAccountById, recordBackup, privacyMode } =
+    useStore();
   const { addToast } = useToastStore();
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterAccount, setFilterAccount] = useState("all");
-  const [filterType, setFilterType] = useState<
-    "all" | "income" | "expense" | "transfer"
-  >("all");
+  const [filterType, setFilterType] = useState<TypeFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   const filtered = useMemo(() => {
-    let result = transactions.filter((tx) => {
+    const q = search.trim().toLowerCase();
+    const result = transactions.filter((tx) => {
       if (filterType !== "all" && tx.type !== filterType) return false;
       if (filterCategory !== "All") {
         if (filterCategory === "Transfer" && tx.type !== "transfer")
@@ -77,30 +76,34 @@ export function TransactionHistory() {
         if (filterCategory !== "Transfer" && tx.category !== filterCategory)
           return false;
       }
-      if (filterAccount !== "all" && tx.accountId !== filterAccount)
+      if (
+        filterAccount !== "all" &&
+        tx.accountId !== filterAccount &&
+        tx.toAccountId !== filterAccount
+      )
         return false;
       if (dateFrom && tx.date < dateFrom) return false;
       if (dateTo && tx.date > dateTo) return false;
-      if (search) {
-        const q = search.toLowerCase();
+      if (q) {
         const acc = getAccountById(tx.accountId);
         return (
           tx.note.toLowerCase().includes(q) ||
           tx.category.toLowerCase().includes(q) ||
-          acc?.name.toLowerCase().includes(q) ||
+          !!acc?.name.toLowerCase().includes(q) ||
           String(tx.amount).includes(q)
         );
       }
       return true;
     });
 
-    // Sort
     result.sort((a, b) => {
       let cmp = 0;
-      if (sortField === "date") cmp = a.date.localeCompare(b.date);
+      if (sortField === "date")
+        cmp =
+          a.date.localeCompare(b.date) ||
+          a.createdAt.localeCompare(b.createdAt);
       else if (sortField === "amount") cmp = a.amount - b.amount;
-      else if (sortField === "category")
-        cmp = a.category.localeCompare(b.category);
+      else cmp = a.category.localeCompare(b.category);
       return sortDir === "asc" ? cmp : -cmp;
     });
 
@@ -118,6 +121,17 @@ export function TransactionHistory() {
     getAccountById,
   ]);
 
+  // Summary of the filtered set (transfers are neutral to net worth)
+  const summary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const tx of filtered) {
+      if (tx.type === "income") income += tx.amount;
+      else if (tx.type === "expense") expense += tx.amount;
+    }
+    return { income, expense, net: income - expense };
+  }, [filtered]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginated = useMemo(() => {
@@ -125,7 +139,33 @@ export function TransactionHistory() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, safeCurrentPage, pageSize]);
 
-  // Reset to page 1 when filters change
+  // Group the visible page by day when sorted by date
+  const groups = useMemo(() => {
+    if (sortField !== "date") {
+      return [{ key: "all", label: "", items: paginated, net: 0 }];
+    }
+    const map = new Map<string, Transaction[]>();
+    for (const tx of paginated) {
+      const list = map.get(tx.date) ?? [];
+      list.push(tx);
+      map.set(tx.date, list);
+    }
+    return Array.from(map.entries()).map(([date, items]) => ({
+      key: date,
+      label: formatDayLabel(date),
+      items,
+      net: items.reduce(
+        (s, t) =>
+          t.type === "income"
+            ? s + t.amount
+            : t.type === "expense"
+              ? s - t.amount
+              : s,
+        0,
+      ),
+    }));
+  }, [paginated, sortField]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [
@@ -140,30 +180,42 @@ export function TransactionHistory() {
     pageSize,
   ]);
 
-  const handleDuplicate = (tx: Transaction) => {
-    addTransaction({
-      type: tx.type,
-      amount: tx.amount,
-      category: tx.category,
-      note: tx.note ? `${tx.note} (Copy)` : "Copy",
-      date: todayISO(),
-      accountId: tx.accountId,
-      toAccountId: tx.toAccountId,
-      isRecurring: false,
-    });
-    addToast({
-      type: "success",
-      message: `Duplicated transaction "${tx.note || tx.category}"`,
-      duration: 3500,
-    });
+  const activeFilterCount =
+    (filterCategory !== "All" ? 1 : 0) +
+    (filterAccount !== "all" ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0) +
+    (sortField !== "date" || sortDir !== "desc" ? 1 : 0);
+  const hasAnyFilter =
+    activeFilterCount > 0 || filterType !== "all" || !!search;
+
+  const resetFilters = () => {
+    setSearch("");
+    setFilterCategory("All");
+    setFilterAccount("all");
+    setFilterType("all");
+    setDateFrom("");
+    setDateTo("");
+    setSortField("date");
+    setSortDir("desc");
+  };
+
+  const applyPreset = (preset: "month" | "30d" | "all") => {
+    const now = new Date();
+    if (preset === "all") {
+      setDateFrom("");
+      setDateTo("");
+    } else if (preset === "month") {
+      setDateFrom(toISO(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setDateTo(toISO(now));
+    } else {
+      setDateFrom(toISO(new Date(now.getTime() - 30 * 864e5)));
+      setDateTo(toISO(now));
+    }
   };
 
   const handleExportCSV = () => {
     if (filtered.length === 0) {
-      addToast({
-        type: "warning",
-        message: "No transactions to export",
-      });
+      addToast({ type: "warning", message: "No transactions to export" });
       return;
     }
     const headers = [
@@ -209,505 +261,483 @@ export function TransactionHistory() {
     });
   };
 
-  const TypeIcon = ({ type }: { type: Transaction["type"] }) => {
-    if (type === "income")
-      return <ArrowDownLeft size={15} className="text-emerald-400" />;
-    if (type === "expense")
-      return <ArrowUpRight size={15} className="text-rose-400" />;
-    return <ArrowLeftRight size={15} className="text-sky-400" />;
-  };
-
-  const startResult = filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const startResult =
+    filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
   const endResult = Math.min(safeCurrentPage * pageSize, filtered.length);
 
+  const pagerBtn =
+    "flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.09] transition-all disabled:opacity-20 disabled:pointer-events-none";
+
   return (
-    <div className="space-y-4 sm:space-y-5 pb-20 lg:pb-8">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="section-title">Transaction History</h2>
-          <p className="text-xs text-white/40 mt-0.5">
-            Manage, filter, and review all account movements
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-white/80 hover:text-white border border-white/10 transition-colors shadow-sm"
-            title="Export filtered transactions to CSV"
+    <div className="space-y-3.5">
+      {/* Summary strip */}
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        {[
+          {
+            label: "Income",
+            value: summary.income,
+            sign: "+",
+            icon: <ArrowDownLeft size={14} />,
+            tone: "text-emerald-400 bg-emerald-500/15",
+            valueTone: "text-emerald-400",
+          },
+          {
+            label: "Expenses",
+            value: summary.expense,
+            sign: "-",
+            icon: <ArrowUpRight size={14} />,
+            tone: "text-rose-400 bg-rose-500/15",
+            valueTone: "text-rose-400",
+          },
+          {
+            label: "Net",
+            value: Math.abs(summary.net),
+            sign: summary.net >= 0 ? "+" : "-",
+            icon: <Scale size={14} />,
+            tone: "text-blue-400 bg-blue-500/15",
+            valueTone: summary.net >= 0 ? "text-white" : "text-rose-300",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="glass-card px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 min-w-0"
           >
-            <Download size={14} />
-            <span>Export CSV</span>
-          </button>
-          <span className="text-xs font-mono bg-white/[0.05] border border-white/[0.08] px-2.5 py-1.5 rounded-xl text-white/60">
-            {filtered.length} transaction{filtered.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-      </div>
-
-      {/* Filter Toolbar */}
-      <Card padding="sm" className="space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search
-            size={15}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30"
-          />
-          <input
-            className="input-base pl-10 text-sm"
-            placeholder="Search by note, category, account, or amount..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Filter Row */}
-        <div className="flex gap-2 flex-wrap items-center">
-          {/* Type Tabs */}
-          <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-xl p-1 gap-1 flex-wrap">
-            {(["all", "income", "expense", "transfer"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilterType(t)}
+            <div
+              className={cn(
+                "w-8 h-8 rounded-xl hidden xs:flex items-center justify-center flex-shrink-0",
+                s.tone,
+              )}
+            >
+              {s.icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-white/40 font-medium">
+                {s.label}
+              </p>
+              <p
                 className={cn(
-                  "px-3 py-1 rounded-lg text-xs font-medium capitalize transition-all duration-200 min-h-[32px]",
-                  filterType === t
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "text-white/50 hover:text-white hover:bg-white/[0.04]",
+                  "text-xs sm:text-base font-bold font-mono tabular-nums truncate",
+                  s.valueTone,
+                  privacyMode && "privacy-blur",
                 )}
               >
-                {t}
+                {s.sign}
+                {formatCurrency(s.value, "EGP").replace("EGP ", "")}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div className="glass-card p-2.5 sm:p-3 space-y-2.5">
+        <div className="flex flex-col lg:flex-row gap-2.5 lg:items-center">
+          <div className="relative flex-1">
+            <Search
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+            />
+            <input
+              className="input-base pl-10 pr-9 text-sm py-2"
+              placeholder="Search note, category, account or amount…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search transactions"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10"
+              >
+                <X size={13} />
               </button>
-            ))}
+            )}
           </div>
 
-          {/* Account Filter */}
-          <select
-            className="input-base text-xs py-2 flex-1 min-w-[130px] min-h-[38px] [&>option]:bg-[#111827]"
-            value={filterAccount}
-            onChange={(e) => setFilterAccount(e.target.value)}
-            aria-label="Filter transactions by account"
-          >
-            <option value="all">All Accounts</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} ({a.currency})
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 lg:flex-none flex bg-white/[0.04] border border-white/[0.06] rounded-xl p-0.5 gap-0.5">
+              {TYPE_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setFilterType(t.id)}
+                  className={cn(
+                    "flex-1 lg:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    filterType === t.id
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "text-white/50 hover:text-white hover:bg-white/[0.05]",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Category Filter */}
-          <select
-            className="input-base text-xs py-2 flex-1 min-w-[130px] min-h-[38px] [&>option]:bg-[#111827]"
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            aria-label="Filter transactions by category"
-          >
-            {ALL_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Date Range + Sort Row */}
-        <div className="flex gap-2 flex-wrap items-end">
-          <div className="flex items-center gap-1.5 flex-1 min-w-[220px]">
-            <Calendar size={14} className="text-white/30 flex-shrink-0" />
-            <input
-              type="date"
-              className="input-base text-xs py-1.5 flex-1 min-h-[38px]"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              aria-label="Filter from date"
-              placeholder="From"
-            />
-            <span className="text-white/30 text-xs">–</span>
-            <input
-              type="date"
-              className="input-base text-xs py-1.5 flex-1 min-h-[38px]"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              aria-label="Filter to date"
-              placeholder="To"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <ArrowUpDown size={14} className="text-white/30 flex-shrink-0" />
-            <select
-              className="input-base text-xs py-1.5 min-w-[100px] min-h-[38px] [&>option]:bg-[#111827]"
-              value={sortField}
-              onChange={(e) => setSortField(e.target.value as SortField)}
-              aria-label="Sort transactions by"
-            >
-              <option value="date">Date</option>
-              <option value="amount">Amount</option>
-              <option value="category">Category</option>
-            </select>
             <button
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              className="px-3 py-2 rounded-xl text-white/60 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition-all text-xs font-medium min-h-[38px] text-center"
-              aria-label={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
+              onClick={() => setShowFilters((v) => !v)}
+              aria-expanded={showFilters}
+              className={cn(
+                "relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all",
+                showFilters || activeFilterCount > 0
+                  ? "bg-blue-500/15 border-blue-500/30 text-blue-300"
+                  : "bg-white/[0.04] border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08]",
+              )}
             >
-              {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              title="Export filtered transactions to CSV"
+              aria-label="Export CSV"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all"
+            >
+              <Download size={14} />
+              <span className="hidden md:inline">CSV</span>
             </button>
           </div>
         </div>
-      </Card>
 
-      {/* Transaction Table / List */}
-      {filtered.length === 0 ? (
-        <Card className="text-center py-16 p-6">
-          <Filter size={36} className="mx-auto text-white/20 mb-3" />
-          <h3 className="text-base font-semibold text-white">No transactions found</h3>
-          <p className="text-white/40 text-xs mt-1 mb-4 max-w-sm mx-auto">
-            No transactions match your current search and filter criteria.
-          </p>
-          <button
-            onClick={() => {
-              setSearch("");
-              setFilterCategory("All");
-              setFilterAccount("all");
-              setFilterType("all");
-              setDateFrom("");
-              setDateTo("");
-            }}
-            className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white border border-white/10 transition-colors inline-flex items-center gap-1.5 shadow-sm"
-          >
-            <RotateCcw size={13} />
-            <span>Reset Filters</span>
-          </button>
-        </Card>
-      ) : (
-        <>
-          {/* Mobile Clean Stacked Cards (< md) */}
-          <div className="block md:hidden space-y-2.5">
-            {paginated.map((tx) => {
-              const fromAcc = getAccountById(tx.accountId);
-              const toAcc = tx.toAccountId
-                ? getAccountById(tx.toAccountId)
-                : undefined;
-              const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
+        {showFilters && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2.5 border-t border-white/[0.06] animate-fade-in">
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wider text-white/40">
+                Account
+              </span>
+              <select
+                className="input-base text-xs py-2 [&>option]:bg-[#111827]"
+                value={filterAccount}
+                onChange={(e) => setFilterAccount(e.target.value)}
+              >
+                <option value="all">All accounts</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.currency})
+                  </option>
+                ))}
+              </select>
+            </label>
 
-              const borderTypeClass =
-                tx.type === "income"
-                  ? "border-l-emerald-500"
-                  : tx.type === "expense"
-                    ? "border-l-rose-500"
-                    : "border-l-sky-500";
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wider text-white/40">
+                Category
+              </span>
+              <select
+                className="input-base text-xs py-2 [&>option]:bg-[#111827]"
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                {ALL_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "All" ? "All categories" : c}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-              return (
-                <div
-                  key={tx.id}
-                  className={cn(
-                    "glass-card p-3.5 rounded-xl border-l-[3px] transition-all duration-200 flex flex-col gap-2.5",
-                    borderTypeClass,
-                  )}
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wider text-white/40">
+                Date range
+              </span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  className="input-base text-xs py-2 px-2"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  aria-label="From date"
+                />
+                <span className="text-white/30 text-xs">–</span>
+                <input
+                  type="date"
+                  className="input-base text-xs py-2 px-2"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  aria-label="To date"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wider text-white/40">
+                Sort by
+              </span>
+              <div className="flex items-center gap-1.5">
+                <select
+                  className="input-base text-xs py-2 [&>option]:bg-[#111827]"
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value as SortField)}
+                  aria-label="Sort transactions by"
                 >
-                  {/* Top Row: Icon + Title + Category + Amount */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div
-                        className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center shadow-sm"
-                        style={{ backgroundColor: `${catColor}20` }}
-                      >
-                        <TypeIcon type={tx.type} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white truncate max-w-[170px]">
-                          {tx.note || tx.category}
-                        </p>
-                        <span
-                          className="text-[9px] font-medium px-1.5 py-0.2 rounded-full"
-                          style={{
-                            backgroundColor: `${catColor}20`,
-                            color: catColor,
-                          }}
-                        >
-                          {tx.category}
-                        </span>
-                      </div>
-                    </div>
+                  <option value="date">Date</option>
+                  <option value="amount">Amount</option>
+                  <option value="category">Category</option>
+                </select>
+                <button
+                  onClick={() =>
+                    setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+                  }
+                  className="px-3 py-2 rounded-xl text-white/70 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium whitespace-nowrap"
+                  aria-label={`Sort ${sortDir === "asc" ? "ascending" : "descending"}`}
+                >
+                  {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+                </button>
+              </div>
+            </div>
 
-                    <p
-                      className={cn(
-                        "text-sm font-bold font-mono whitespace-nowrap text-right",
-                        tx.type === "income" && "text-emerald-400",
-                        tx.type === "expense" && "text-rose-400",
-                        tx.type === "transfer" && "text-sky-400",
-                        privacyMode && "privacy-blur",
-                      )}
-                    >
-                      {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
-                      {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
-                    </p>
-                  </div>
-
-                  {/* Bottom Row: Account Details + Date + Actions */}
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
-                    <div className="text-[11px] text-white/50 truncate min-w-0">
-                      <span>{fromAcc?.name}</span>
-                      {toAcc && <span className="text-sky-400"> → {toAcc.name}</span>}
-                      <span className="mx-1 text-white/20">•</span>
-                      <span className="font-mono">{formatDate(tx.date)}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        type="button"
-                        aria-label="Duplicate transaction"
-                        onClick={() => handleDuplicate(tx)}
-                        className="p-1 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
-                      >
-                        <Copy size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Edit transaction"
-                        onClick={() => setEditingTx(tx)}
-                        className="p-1 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Delete transaction"
-                        onClick={() => setConfirmDelete(tx.id)}
-                        className="p-1 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-white/40 mr-1">
+                Quick range
+              </span>
+              {(
+                [
+                  ["month", "This month"],
+                  ["30d", "Last 30 days"],
+                  ["all", "All time"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => applyPreset(id)}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white/70 hover:text-white transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+              {hasAnyFilter && (
+                <button
+                  onClick={resetFilters}
+                  className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-300 hover:text-rose-200"
+                >
+                  <RotateCcw size={12} />
+                  Reset all
+                </button>
+              )}
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Desktop Full Ledger Table (md:) */}
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0E131E]/60 backdrop-blur-xl shadow-xl">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/[0.08] bg-white/[0.02] text-white/40 font-mono text-[11px] uppercase tracking-wider">
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Description</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Account</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {paginated.map((tx) => {
+      {/* Ledger */}
+      {filtered.length === 0 ? (
+        <div className="glass-card text-center py-14 px-6">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-white/[0.05] flex items-center justify-center mb-3">
+            <ReceiptText size={22} className="text-white/30" />
+          </div>
+          <h3 className="text-sm font-semibold text-white">
+            No transactions found
+          </h3>
+          <p className="text-white/40 text-xs mt-1 mb-4 max-w-sm mx-auto">
+            {transactions.length === 0
+              ? "Add your first transaction with the + button."
+              : "Nothing matches your current search and filters."}
+          </p>
+          {hasAnyFilter && (
+            <button
+              onClick={resetFilters}
+              className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white border border-white/10 transition-colors inline-flex items-center gap-1.5"
+            >
+              <RotateCcw size={13} />
+              Reset filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="glass-card overflow-hidden">
+          {groups.map((group) => (
+            <section key={group.key}>
+              {group.label && (
+                <div className="flex items-center justify-between px-4 py-1.5 bg-white/[0.025] border-y border-white/[0.04] first:border-t-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
+                    {group.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[11px] font-mono tabular-nums",
+                      group.net > 0
+                        ? "text-emerald-400/80"
+                        : group.net < 0
+                          ? "text-rose-400/80"
+                          : "text-white/30",
+                      privacyMode && "privacy-blur",
+                    )}
+                  >
+                    {group.net > 0 ? "+" : group.net < 0 ? "-" : ""}
+                    {formatCurrency(group.net, "EGP").replace("EGP ", "")}
+                  </span>
+                </div>
+              )}
+
+              <ul className="divide-y divide-white/[0.04]">
+                {group.items.map((tx) => {
                   const fromAcc = getAccountById(tx.accountId);
                   const toAcc = tx.toAccountId
                     ? getAccountById(tx.toAccountId)
                     : undefined;
-                  const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
+                  const meta = TX_TYPE_META[tx.type];
+                  const catColor = getCategoryColor(tx);
+                  const Icon = getCategoryIcon(tx.category, tx.type);
 
                   return (
-                    <tr
-                      key={tx.id}
-                      className="hover:bg-white/[0.02] transition-colors group"
-                    >
-                      <td className="py-3 px-4 font-mono text-white/50 whitespace-nowrap">
-                        {formatDate(tx.date)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${catColor}20` }}
-                          >
-                            <TypeIcon type={tx.type} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-white truncate max-w-xs">
-                              {tx.note || tx.category}
-                            </p>
-                            {tx.isRecurring && (
-                              <span className="text-[9px] uppercase tracking-wider font-semibold text-blue-400">
-                                Recurring ({tx.recurrenceFrequency || "active"})
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <span
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                    <li key={tx.id}>
+                      <button
+                        onClick={() => setSelectedTx(tx)}
+                        className="w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 text-left hover:bg-white/[0.035] focus-visible:bg-white/[0.05] focus:outline-none transition-colors group"
+                        aria-label={`View details for ${tx.note || tx.category}`}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center"
                           style={{
-                            backgroundColor: `${catColor}20`,
+                            backgroundColor: `${catColor}1f`,
                             color: catColor,
                           }}
                         >
-                          {tx.category}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-white/70">
-                          <span>{fromAcc?.name || "Account"}</span>
-                          {toAcc && (
-                            <span className="text-sky-400">→ {toAcc.name}</span>
-                          )}
+                          <Icon size={18} />
                         </div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold whitespace-nowrap">
-                        <span
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[13px] font-semibold text-white truncate">
+                              {tx.note || tx.category}
+                            </p>
+                            {tx.isRecurring && (
+                              <Repeat
+                                size={11}
+                                className="text-blue-400 flex-shrink-0"
+                              />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-white/40 truncate">
+                            <span
+                              style={{ color: catColor }}
+                              className="opacity-90"
+                            >
+                              {tx.category}
+                            </span>
+                            <span className="mx-1 text-white/20">•</span>
+                            {fromAcc?.name ?? "Account"}
+                            {toAcc && (
+                              <span className="text-sky-400">
+                                {" "}
+                                → {toAcc.name}
+                              </span>
+                            )}
+                            {sortField !== "date" && (
+                              <>
+                                <span className="mx-1 text-white/20">•</span>
+                                {formatDayLabel(tx.date)}
+                              </>
+                            )}
+                          </p>
+                        </div>
+
+                        <p
                           className={cn(
-                            tx.type === "income" && "text-emerald-400",
-                            tx.type === "expense" && "text-rose-400",
-                            tx.type === "transfer" && "text-sky-400",
+                            "text-sm font-bold font-mono tabular-nums whitespace-nowrap",
+                            meta.text,
                             privacyMode && "privacy-blur",
                           )}
                         >
-                          {tx.type === "income"
-                            ? "+"
-                            : tx.type === "expense"
-                              ? "-"
-                              : ""}
-                          {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            aria-label="Duplicate transaction"
-                            title="Duplicate transaction"
-                            onClick={() => handleDuplicate(tx)}
-                            className="p-1.5 rounded-lg text-white/40 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
-                          >
-                            <Copy size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Edit transaction"
-                            title="Edit transaction"
-                            onClick={() => setEditingTx(tx)}
-                            className="p-1.5 rounded-lg text-white/40 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Delete transaction"
-                            title="Delete transaction"
-                            onClick={() => setConfirmDelete(tx.id)}
-                            className="p-1.5 rounded-lg text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                          {meta.sign}
+                          {formatCurrency(
+                            tx.amount,
+                            fromAcc?.currency || "EGP",
+                          )}
+                        </p>
+                        <ChevronRight
+                          size={14}
+                          className="text-white/15 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all flex-shrink-0 hidden sm:block"
+                        />
+                      </button>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </>
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
 
-      {/* Redesigned Table Pagination */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
-        {/* Left side: Range info + page-size selector */}
-        <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
-          <p className="text-xs text-white/50 font-mono">
-            Showing{" "}
-            <span className="text-white font-medium">
-              {startResult}–{endResult}
-            </span>{" "}
-            of <span className="text-white font-medium">{filtered.length}</span>{" "}
-            results
-          </p>
+      {/* Pagination */}
+      {filtered.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div className="flex items-center gap-3 text-xs text-white/45">
+            <p className="font-mono">
+              <span className="text-white font-medium">
+                {startResult}–{endResult}
+              </span>{" "}
+              of{" "}
+              <span className="text-white font-medium">{filtered.length}</span>
+            </p>
+            <label className="flex items-center gap-1.5">
+              <span>Per page</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-[#111827] border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                aria-label="Items per page"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={40}>40</option>
+              </select>
+            </label>
+          </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-white/40">
-            <span>Per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="bg-[#111827] border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-              aria-label="Items per page"
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className={pagerBtn}
+              aria-label="First page"
             >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
+              <ChevronsLeft size={15} />
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className={pagerBtn}
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <div className="px-3 h-8 flex items-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white/80 min-w-[72px] justify-center">
+              <span className="text-white font-semibold">
+                {safeCurrentPage}
+              </span>
+              <span className="text-white/30 mx-1">/</span>
+              <span>{totalPages}</span>
+            </div>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className={pagerBtn}
+              aria-label="Next page"
+            >
+              <ChevronRight size={15} />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className={pagerBtn}
+              aria-label="Last page"
+            >
+              <ChevronsRight size={15} />
+            </button>
           </div>
         </div>
-
-        {/* Right side: Pill buttons for <<, <, Page X of Y, >, >> */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setCurrentPage(1)}
-            disabled={safeCurrentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
-            aria-label="First page"
-            title="First page"
-          >
-            <ChevronsLeft size={15} />
-          </button>
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={safeCurrentPage === 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
-            aria-label="Previous page"
-            title="Previous page"
-          >
-            <ChevronLeft size={15} />
-          </button>
-
-          <div className="px-3 py-1 rounded-lg bg-[#111827] border border-white/[0.08] text-xs font-mono text-white/80 min-w-[84px] text-center">
-            <span className="text-white font-semibold">{safeCurrentPage}</span>
-            <span className="text-white/30 mx-1">/</span>
-            <span>{totalPages}</span>
-          </div>
-
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={safeCurrentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
-            aria-label="Next page"
-            title="Next page"
-          >
-            <ChevronRight size={15} />
-          </button>
-          <button
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={safeCurrentPage === totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#111827] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-20 disabled:pointer-events-none"
-            aria-label="Last page"
-            title="Last page"
-          >
-            <ChevronsRight size={15} />
-          </button>
-        </div>
-      </div>
-
-      {/* Delete Confirm */}
-      <ConfirmDialog
-        isOpen={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          if (confirmDelete) deleteTransaction(confirmDelete);
-        }}
-        title="Delete Transaction?"
-        message="This will reverse the balance effect on the associated account(s)."
-      />
-
-      {/* Edit Transaction Modal */}
-      {editingTx && (
-        <AddTransactionModal
-          editTransaction={editingTx}
-          onClose={() => setEditingTx(null)}
-        />
       )}
+
+      <TransactionDetailModal
+        transaction={selectedTx}
+        onClose={() => setSelectedTx(null)}
+      />
     </div>
   );
 }

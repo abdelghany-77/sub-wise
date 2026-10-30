@@ -1,120 +1,143 @@
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ArrowLeftRight,
-  ArrowRight,
-  ReceiptText,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowRight, ReceiptText, Repeat } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, formatDate, cn } from "../../lib/utils";
-import { CATEGORY_COLORS } from "../../types";
+import { formatCurrency, formatDayLabel, cn } from "../../lib/utils";
 import type { Transaction } from "../../types";
+import { TransactionDetailModal } from "../transactions/TransactionDetailModal";
+import {
+  TX_TYPE_META,
+  getCategoryColor,
+  getCategoryIcon,
+} from "../transactions/transactionMeta";
 
 interface RecentTransactionsProps {
   onViewAll: () => void;
+  limit?: number;
+  className?: string;
 }
 
-export function RecentTransactions({ onViewAll }: RecentTransactionsProps) {
+export function RecentTransactions({
+  onViewAll,
+  limit = 5,
+  className,
+}: RecentTransactionsProps) {
   const { transactions, getAccountById, privacyMode } = useStore();
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
-  // Strictly top 5 transactions
-  const recent = transactions.slice(0, 5);
-
-  const TypeIcon = ({ type }: { type: Transaction["type"] }) => {
-    if (type === "income")
-      return <ArrowDownLeft size={13} className="text-emerald-400" />;
-    if (type === "expense")
-      return <ArrowUpRight size={13} className="text-rose-400" />;
-    return <ArrowLeftRight size={13} className="text-sky-400" />;
-  };
+  const recent = useMemo(
+    () =>
+      [...transactions]
+        .sort(
+          (a, b) =>
+            b.date.localeCompare(a.date) ||
+            b.createdAt.localeCompare(a.createdAt),
+        )
+        .slice(0, limit),
+    [transactions, limit],
+  );
 
   return (
-    <Card className="p-4 sm:p-5 flex flex-col justify-between h-full relative overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+    <Card
+      padding="sm"
+      className={cn("flex flex-col h-full relative overflow-hidden", className)}
+    >
+      <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-white/[0.06]">
         <div>
           <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
-          <p className="text-[11px] text-white/40">Latest 5 ledger movements</p>
+          <p className="text-[11px] text-white/40">
+            Tap a row for full details
+          </p>
         </div>
         <button
           onClick={onViewAll}
           className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors py-1 px-2.5 rounded-lg hover:bg-blue-500/10"
         >
-          <span>View All</span>
+          <span>View all</span>
           <ArrowRight size={13} />
         </button>
       </div>
 
-      {/* List */}
-      <div className="flex-1 mt-2">
+      <div className="flex-1 min-h-0 mt-1.5">
         {recent.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center py-8">
             <ReceiptText size={28} className="text-white/20 mb-2" />
-            <p className="text-xs text-white/40">No transactions recorded yet.</p>
+            <p className="text-xs text-white/40">
+              No transactions recorded yet.
+            </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <ul className="space-y-0.5">
             {recent.map((tx) => {
               const fromAcc = getAccountById(tx.accountId);
-              const toAcc = tx.toAccountId ? getAccountById(tx.toAccountId) : undefined;
-              const catColor = CATEGORY_COLORS[tx.category] ?? "#94a3b8";
+              const toAcc = tx.toAccountId
+                ? getAccountById(tx.toAccountId)
+                : undefined;
+              const meta = TX_TYPE_META[tx.type];
+              const catColor = getCategoryColor(tx);
+              const Icon = getCategoryIcon(tx.category, tx.type);
 
               return (
-                <div
-                  key={tx.id}
-                  onClick={onViewAll}
-                  className="cursor-pointer group flex items-center justify-between gap-3 py-2 px-2.5 rounded-xl hover:bg-white/[0.04] transition-all duration-150"
-                >
-                  {/* Left: Icon & Title/Account */}
-                  <div className="flex items-center gap-2.5 min-w-0">
+                <li key={tx.id}>
+                  <button
+                    onClick={() => setSelectedTx(tx)}
+                    className="w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl text-left hover:bg-white/[0.05] focus-visible:bg-white/[0.06] focus:outline-none transition-colors"
+                    aria-label={`View details for ${tx.note || tx.category}`}
+                  >
                     <div
-                      className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center"
-                      style={{ backgroundColor: `${catColor}15` }}
+                      className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        backgroundColor: `${catColor}1f`,
+                        color: catColor,
+                      }}
                     >
-                      <TypeIcon type={tx.type} />
+                      <Icon size={16} />
                     </div>
 
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate max-w-[140px] xs:max-w-[200px] sm:max-w-[220px]">
-                        {tx.note || tx.category}
-                      </p>
-                      <div className="flex items-center gap-1.5 text-[10px] text-white/40">
-                        <span className="truncate max-w-[90px]">{fromAcc?.name || "Account"}</span>
-                        {toAcc && <span className="text-sky-400">→ {toAcc.name}</span>}
-                        <span>•</span>
-                        <span className="font-mono text-white/50">{formatDate(tx.date)}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-white truncate">
+                          {tx.note || tx.category}
+                        </p>
+                        {tx.isRecurring && (
+                          <Repeat
+                            size={10}
+                            className="text-blue-400 flex-shrink-0"
+                          />
+                        )}
                       </div>
+                      <p className="text-[10px] text-white/40 truncate">
+                        {fromAcc?.name || "Account"}
+                        {toAcc && (
+                          <span className="text-sky-400"> → {toAcc.name}</span>
+                        )}
+                        <span className="mx-1 text-white/20">•</span>
+                        {formatDayLabel(tx.date)}
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Right: Amount */}
-                  <div className="text-right flex-shrink-0">
                     <p
                       className={cn(
-                        "text-xs sm:text-sm font-bold font-mono tabular-nums whitespace-nowrap",
-                        tx.type === "income" && "text-emerald-400",
-                        tx.type === "expense" && "text-rose-400",
-                        tx.type === "transfer" && "text-sky-400",
+                        "text-xs sm:text-[13px] font-bold font-mono tabular-nums whitespace-nowrap",
+                        meta.text,
                         privacyMode && "privacy-blur",
                       )}
                     >
-                      {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
+                      {meta.sign}
                       {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
                     </p>
-                    <span
-                      className="text-[9px] font-medium block uppercase tracking-wider"
-                      style={{ color: catColor }}
-                    >
-                      {tx.category}
-                    </span>
-                  </div>
-                </div>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </div>
+
+      <TransactionDetailModal
+        transaction={selectedTx}
+        onClose={() => setSelectedTx(null)}
+      />
     </Card>
   );
 }

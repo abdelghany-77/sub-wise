@@ -5,10 +5,8 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
-  TrendingUp,
   Wallet,
   Coins,
-  CheckCircle2,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -21,12 +19,110 @@ import type { Budget } from "../../types";
 
 const CURRENCIES = ["EGP", "USD", "EUR", "GBP", "SAR", "AED"];
 
+type SortKey = "risk" | "limit" | "name";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "risk", label: "Most used" },
+  { key: "limit", label: "Largest" },
+  { key: "name", label: "A–Z" },
+];
+
+type Tone = "ok" | "warn" | "over";
+
+const TONES: Record<
+  Tone,
+  { stroke: string; text: string; bar: string; badge: string }
+> = {
+  ok: {
+    stroke: "stroke-emerald-400",
+    text: "text-emerald-400",
+    bar: "bg-emerald-500",
+    badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  },
+  warn: {
+    stroke: "stroke-amber-400",
+    text: "text-amber-400",
+    bar: "bg-amber-500",
+    badge: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+  },
+  over: {
+    stroke: "stroke-rose-400",
+    text: "text-rose-400",
+    bar: "bg-rose-500",
+    badge: "bg-rose-500/15 text-rose-400 border-rose-500/25",
+  },
+};
+
+const getTone = (pct: number): Tone =>
+  pct >= 100 ? "over" : pct >= 80 ? "warn" : "ok";
+
+const RING_RADIUS = 16;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+function BudgetRing({
+  pct,
+  tone,
+  label: ariaLabel,
+}: {
+  pct: number;
+  tone: Tone;
+  label: string;
+}) {
+  const clamped = Math.min(Math.max(pct, 0), 100);
+  const label = pct > 999 ? "999+" : `${Math.round(pct)}`;
+  return (
+    <div
+      className="relative w-11 h-11 flex-shrink-0"
+      role="img"
+      aria-label={ariaLabel}
+    >
+      <svg viewBox="0 0 40 40" className="w-full h-full -rotate-90">
+        <circle
+          cx="20"
+          cy="20"
+          r={RING_RADIUS}
+          fill="none"
+          strokeWidth="4"
+          className="stroke-white/[0.08]"
+        />
+        <circle
+          cx="20"
+          cy="20"
+          r={RING_RADIUS}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - clamped / 100)}
+          className={cn("transition-all duration-500", TONES[tone].stroke)}
+        />
+      </svg>
+      <span
+        className={cn(
+          "absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono",
+          TONES[tone].text,
+        )}
+      >
+        {label}%
+      </span>
+    </div>
+  );
+}
+
 export function BudgetsPanel() {
-  const { budgets, transactions, addBudget, updateBudget, deleteBudget, privacyMode, settings } =
-    useStore();
+  const {
+    budgets,
+    transactions,
+    addBudget,
+    updateBudget,
+    deleteBudget,
+    privacyMode,
+    settings,
+  } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>("risk");
   const [form, setForm] = useState({
     category: "",
     limit: "",
@@ -40,7 +136,6 @@ export function BudgetsPanel() {
     [settings.monthStartsOnDay],
   );
 
-  // Financial cycle spending per category
   const monthlySpending = useMemo(() => {
     const map: Record<string, number> = {};
     transactions
@@ -51,9 +146,28 @@ export function BudgetsPanel() {
     return map;
   }, [transactions, cycle]);
 
+  const rows = useMemo(() => {
+    const list = budgets.map((b) => {
+      const spent = monthlySpending[b.category] ?? 0;
+      const pct = b.limit > 0 ? (spent / b.limit) * 100 : 0;
+      return { budget: b, spent, pct, remaining: b.limit - spent };
+    });
+    return list.sort((a, b) => {
+      if (sortBy === "name")
+        return a.budget.category.localeCompare(b.budget.category);
+      if (sortBy === "limit") return b.budget.limit - a.budget.limit;
+      return b.pct - a.pct;
+    });
+  }, [budgets, monthlySpending, sortBy]);
+
   const openAdd = () => {
     setEditingBudget(null);
-    setForm({ category: "", limit: "", currency: "EGP", deductFromNetWorth: false });
+    setForm({
+      category: "",
+      limit: "",
+      currency: "EGP",
+      deductFromNetWorth: false,
+    });
     setErrors({});
     setIsOpen(true);
   };
@@ -75,8 +189,12 @@ export function BudgetsPanel() {
     if (!form.category) e.category = "Select a category";
     if (!form.limit || isNaN(Number(form.limit)) || Number(form.limit) <= 0)
       e.limit = "Enter a valid limit";
-    // Prevent duplicate category budgets
-    if (!editingBudget && budgets.some((b) => b.category === form.category)) {
+    if (
+      form.category &&
+      budgets.some(
+        (b) => b.category === form.category && b.id !== editingBudget?.id,
+      )
+    ) {
       e.category = "Budget for this category already exists";
     }
     if (Object.keys(e).length > 0) {
@@ -84,215 +202,292 @@ export function BudgetsPanel() {
       return;
     }
 
+    const data = {
+      category: form.category,
+      limit: Number(form.limit),
+      currency: form.currency,
+      deductFromNetWorth: form.deductFromNetWorth,
+    };
+
     if (editingBudget) {
-      updateBudget(editingBudget.id, {
-        category: form.category,
-        limit: Number(form.limit),
-        currency: form.currency,
-        deductFromNetWorth: form.deductFromNetWorth,
-      });
+      updateBudget(editingBudget.id, data);
     } else {
-      addBudget({
-        category: form.category,
-        limit: Number(form.limit),
-        currency: form.currency,
-        deductFromNetWorth: form.deductFromNetWorth,
-      });
+      addBudget(data);
     }
     setIsOpen(false);
   };
 
-  const getSpentPercent = (b: Budget) => {
-    const spent = monthlySpending[b.category] ?? 0;
-    return b.limit > 0 ? (spent / b.limit) * 100 : 0;
-  };
+  const primaryCurrency = budgets[0]?.currency ?? "EGP";
+  const summaryRows = rows.filter((r) => r.budget.currency === primaryCurrency);
+  const hasMixedCurrencies = summaryRows.length !== rows.length;
+  const totalBudget = summaryRows.reduce((s, r) => s + r.budget.limit, 0);
+  const totalSpent = summaryRows.reduce((s, r) => s + r.spent, 0);
+  const totalLeft = totalBudget - totalSpent;
+  const totalPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const overBudgetCount = rows.filter((r) => r.spent > r.budget.limit).length;
 
-  const getBarColor = (pct: number) => {
-    if (pct >= 100) return "bg-rose-500";
-    if (pct >= 80) return "bg-amber-500";
-    return "bg-emerald-500";
-  };
+  const totalDeductedFromNetWorth = summaryRows
+    .filter((r) => r.budget.deductFromNetWorth)
+    .reduce((s, r) => s + r.budget.limit, 0);
 
-  // Summary stats
-  const totalBudget = budgets.reduce((s, b) => s + b.limit, 0);
-  const totalSpent = budgets.reduce(
-    (s, b) => s + (monthlySpending[b.category] ?? 0),
-    0,
-  );
-  const overBudgetCount = budgets.filter(
-    (b) => (monthlySpending[b.category] ?? 0) > b.limit,
-  ).length;
-
-  const totalDeductedFromNetWorth = budgets
-    .filter((b) => b.deductFromNetWorth)
-    .reduce((s, b) => s + b.limit, 0);
+  const blur = privacyMode && "privacy-blur";
 
   return (
-    <div className="space-y-5 pb-20 lg:pb-8">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="section-title">Budgets & Spending Limits</h2>
-          <p className="text-xs text-white/40 mt-0.5">
-            Active Cycle: <span className="text-blue-300 font-medium font-mono">{cycle.cycleLabel}</span> ({cycle.remainingDays} days remaining)
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="section-title leading-tight">Budgets</h2>
+          <p className="text-xs text-white/40 mt-0.5 truncate">
+            <span className="text-blue-300 font-medium font-mono">
+              {cycle.cycleLabel}
+            </span>{" "}
+            · {cycle.remainingDays} {cycle.remainingDays === 1 ? "day" : "days"}{" "}
+            left
           </p>
         </div>
-        <Button icon={<Plus size={16} />} onClick={openAdd}>
+        <Button
+          size="sm"
+          icon={<Plus size={16} />}
+          onClick={openAdd}
+          className="flex-shrink-0"
+        >
           <span className="hidden xs:inline">Add Budget</span>
           <span className="xs:hidden">Add</span>
         </Button>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Card padding="sm" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-            <Wallet size={18} className="text-blue-400" />
+      {budgets.length > 0 && (
+        <Card padding="sm" className="space-y-2.5 !p-3 sm:!p-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <p className="text-[11px] text-white/40">Total Budget</p>
+              <p
+                className={cn(
+                  "text-sm sm:text-base font-bold text-white font-mono truncate",
+                  blur,
+                )}
+              >
+                {formatCurrency(totalBudget, primaryCurrency)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-white/40">Spent</p>
+              <p
+                className={cn(
+                  "text-sm sm:text-base font-bold text-white font-mono truncate",
+                  blur,
+                )}
+              >
+                {formatCurrency(totalSpent, primaryCurrency)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-white/40">
+                {totalLeft < 0 ? "Over by" : "Remaining"}
+              </p>
+              <p
+                className={cn(
+                  "text-sm sm:text-base font-bold font-mono truncate",
+                  totalLeft < 0 ? "text-rose-400" : "text-emerald-400",
+                  blur,
+                )}
+              >
+                {formatCurrency(totalLeft, primaryCurrency)}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-white/40">Over Budget</p>
+              <p
+                className={cn(
+                  "text-sm sm:text-base font-bold font-mono flex items-center gap-1.5",
+                  overBudgetCount > 0 ? "text-rose-400" : "text-white",
+                )}
+              >
+                {overBudgetCount > 0 && <AlertTriangle size={14} />}
+                {overBudgetCount}
+                <span className="text-[11px] font-normal text-white/30">
+                  of {rows.length}
+                </span>
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs text-white/40">Total Budget</p>
-            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
-              {formatCurrency(totalBudget, budgets[0]?.currency)}
-            </p>
-          </div>
-        </Card>
 
-        <Card padding="sm" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-            <TrendingUp size={18} className="text-emerald-400" />
+          <div
+            className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.round(Math.min(totalPct, 100))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Overall budget used"
+          >
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                TONES[getTone(totalPct)].bar,
+              )}
+              style={{ width: `${Math.min(totalPct, 100)}%` }}
+            />
           </div>
-          <div className="min-w-0">
-            <p className="text-xs text-white/40">Cycle Spent</p>
-            <p className={cn("text-sm sm:text-lg font-bold text-white font-mono", privacyMode && "privacy-blur")}>
-              {formatCurrency(totalSpent, budgets[0]?.currency)}
-            </p>
-          </div>
-        </Card>
 
-        <Card padding="sm" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle size={18} className="text-rose-400" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-white/40">Over Budget</p>
-            <p className="text-sm sm:text-lg font-bold text-white font-mono">{overBudgetCount}</p>
-          </div>
+          {(totalDeductedFromNetWorth > 0 || hasMixedCurrencies) && (
+            <div className="flex flex-col gap-1 text-[11px] text-white/40">
+              {totalDeductedFromNetWorth > 0 && (
+                <p className="flex items-center gap-1.5 text-blue-300">
+                  <Coins size={12} className="text-blue-400 flex-shrink-0" />
+                  <span>
+                    <strong className={blur || undefined}>
+                      {formatCurrency(
+                        totalDeductedFromNetWorth,
+                        primaryCurrency,
+                      )}
+                    </strong>{" "}
+                    committed and auto-deducted from Net Worth
+                  </span>
+                </p>
+              )}
+              {hasMixedCurrencies && (
+                <p>Totals include {primaryCurrency} budgets only.</p>
+              )}
+            </div>
+          )}
         </Card>
-      </div>
-
-      {totalDeductedFromNetWorth > 0 && (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
-          <Coins size={16} className="text-blue-400 flex-shrink-0" />
-          <span>
-            <strong>{formatCurrency(totalDeductedFromNetWorth, budgets[0]?.currency)}</strong> in monthly budgets is committed and auto-deducted from your Net Worth.
-          </span>
-        </div>
       )}
 
-      {/* Budget items */}
       {budgets.length === 0 ? (
-        <Card className="text-center py-16">
-          <Wallet size={36} className="mx-auto text-white/20 mb-3" />
-          <p className="text-white/40 text-sm">
-            No budgets set yet. Add a category limit to start tracking your spending.
+        <Card className="text-center py-10 sm:py-12">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-500/10 flex items-center justify-center mb-3">
+            <Wallet size={22} className="text-blue-400" />
+          </div>
+          <p className="text-sm font-medium text-white/80">No budgets yet</p>
+          <p className="text-xs text-white/40 mt-1 mb-4 max-w-xs mx-auto">
+            Set a limit for a spending category to track how much you have left
+            this cycle.
           </p>
+          <Button icon={<Plus size={16} />} onClick={openAdd}>
+            Create your first budget
+          </Button>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {budgets.map((b) => {
-            const spent = monthlySpending[b.category] ?? 0;
-            const pct = getSpentPercent(b);
-            const catColor = CATEGORY_COLORS[b.category] ?? "#94a3b8";
-
-            return (
-              <div
-                key={b.id}
-                className="glass-card-hover group p-4 space-y-3 rounded-xl"
+        <>
+          <div
+            className="flex items-center gap-1.5 text-xs"
+            role="group"
+            aria-label="Sort budgets"
+          >
+            <span className="text-white/30 mr-1">Sort</span>
+            {SORT_OPTIONS.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                aria-pressed={sortBy === o.key}
+                onClick={() => setSortBy(o.key)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+                  sortBy === o.key
+                    ? "bg-blue-500/20 border-blue-500/30 text-blue-300"
+                    : "bg-white/[0.03] border-white/[0.08] text-white/50 hover:text-white/80 hover:bg-white/[0.06]",
+                )}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
-                      style={{ backgroundColor: `${catColor}20` }}
-                    >
-                      <div
-                        className="w-3 h-3 rounded-full"
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+            {rows.map(({ budget: b, spent, pct, remaining }) => {
+              const tone = getTone(pct);
+              const isOver = spent > b.limit;
+              const catColor = CATEGORY_COLORS[b.category] ?? "#94a3b8";
+              const perDay =
+                !isOver && remaining > 0
+                  ? remaining / Math.max(1, cycle.remainingDays)
+                  : 0;
+
+              return (
+                <div
+                  key={b.id}
+                  className={cn(
+                    "glass-card-hover group p-3 rounded-xl flex items-center gap-3",
+                    isOver && "!border-rose-500/30",
+                  )}
+                >
+                  <BudgetRing
+                    pct={pct}
+                    tone={tone}
+                    label={`${b.category} budget, ${Math.round(pct)}% used`}
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: catColor }}
                       />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-white truncate">
-                          {b.category}
-                        </p>
-                        {b.deductFromNetWorth && (
-                          <span className="text-[10px] font-medium font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1">
-                            <CheckCircle2 size={10} /> Auto-deducts from Net Worth
-                          </span>
-                        )}
-                      </div>
-                      <p className={cn("text-xs text-white/40 font-mono mt-0.5", privacyMode && "privacy-blur")}>
-                        {formatCurrency(spent, b.currency)} of{" "}
-                        {formatCurrency(b.limit, b.currency)}
+                      <p className="text-sm font-semibold text-white truncate">
+                        {b.category}
                       </p>
+                      {b.deductFromNetWorth && (
+                        <span
+                          title="Auto-deducts from Net Worth"
+                          className="flex-shrink-0 text-blue-400"
+                        >
+                          <Coins
+                            size={12}
+                            aria-label="Auto-deducts from Net Worth"
+                          />
+                        </span>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span
+                    <p
                       className={cn(
-                        "text-xs font-bold font-mono px-2.5 py-1 rounded-full",
-                        pct >= 100
-                          ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                          : pct >= 80
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
+                        "text-sm font-bold font-mono mt-0.5 truncate",
+                        isOver ? "text-rose-400" : "text-white/90",
+                        blur,
                       )}
                     >
-                      {Math.round(pct)}%
-                    </span>
+                      {isOver
+                        ? `${formatCurrency(-remaining, b.currency)} over`
+                        : `${formatCurrency(remaining, b.currency)} left`}
+                    </p>
+                    <p
+                      className={cn(
+                        "text-[11px] text-white/40 font-mono truncate",
+                        blur,
+                      )}
+                    >
+                      {formatCurrency(spent, b.currency)} /{" "}
+                      {formatCurrency(b.limit, b.currency)}
+                      {perDay > 0 && (
+                        <> · {formatCurrency(perDay, b.currency)}/day</>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center flex-shrink-0">
                     <button
                       type="button"
-                      aria-label="Edit budget"
+                      aria-label={`Edit ${b.category} budget`}
                       onClick={() => openEdit(b)}
-                      className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/30 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-blue-400 hover:bg-blue-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       type="button"
-                      aria-label="Delete budget"
+                      aria-label={`Delete ${b.category} budget`}
                       onClick={() => setConfirmDelete(b.id)}
-                      className="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-rose-400 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-
-                {/* Progress bar */}
-                <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${b.category} budget progress`}>
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      getBarColor(pct),
-                    )}
-                    style={{ width: `${Math.min(pct, 100)}%` }}
-                  />
-                </div>
-
-                {pct >= 100 && (
-                  <p className="text-xs text-rose-400 flex items-center gap-1 font-medium">
-                    <AlertTriangle size={13} />
-                    Over budget by {formatCurrency(spent - b.limit, b.currency)}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      {/* Add/Edit Budget Modal */}
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
@@ -327,9 +522,15 @@ export function BudgetsPanel() {
           <Input
             label="Monthly Limit"
             type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
             placeholder="0.00"
             value={form.limit}
             onChange={(e) => setForm({ ...form, limit: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSubmit();
+            }}
             error={errors.limit}
           />
           <Select
@@ -339,13 +540,14 @@ export function BudgetsPanel() {
             options={CURRENCIES.map((c) => ({ value: c, label: c }))}
           />
 
-          {/* Prompt: Will it be spent each month to deduct from Net Worth? */}
           <div className="pt-2 border-t border-white/[0.08]">
             <label className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={form.deductFromNetWorth}
-                onChange={(e) => setForm({ ...form, deductFromNetWorth: e.target.checked })}
+                onChange={(e) =>
+                  setForm({ ...form, deductFromNetWorth: e.target.checked })
+                }
                 className="mt-1 w-4 h-4 rounded border-white/20 bg-white/10 text-blue-500 focus:ring-blue-500/50"
               />
               <div className="flex-1 text-xs">
@@ -353,7 +555,8 @@ export function BudgetsPanel() {
                   Committed Monthly Spend (Auto-deduct from Net Worth)
                 </span>
                 <span className="text-white/50 block mt-0.5 leading-relaxed">
-                  Will this budget be spent each month? Check to automatically subtract this allocation from your Net Worth calculation.
+                  Will this budget be spent each month? Check to automatically
+                  subtract this allocation from your Net Worth calculation.
                 </span>
               </div>
             </label>
@@ -361,11 +564,12 @@ export function BudgetsPanel() {
         </div>
       </Modal>
 
-      {/* Delete Confirm */}
       <ConfirmDialog
         isOpen={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
-        onConfirm={() => { if (confirmDelete) deleteBudget(confirmDelete); }}
+        onConfirm={() => {
+          if (confirmDelete) deleteBudget(confirmDelete);
+        }}
         title="Delete Budget?"
         message="This will remove the spending limit for this category."
       />

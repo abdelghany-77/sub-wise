@@ -1,5 +1,14 @@
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
 import { formatCurrency, cn } from "../../lib/utils";
@@ -16,7 +25,11 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
     <div className="bg-[#111827] border border-white/10 rounded-xl p-3 shadow-xl">
       <p className="text-white/50 text-xs mb-2">{label}</p>
       {payload.map((p) => (
-        <p key={p.name} className="text-sm font-mono font-medium" style={{ color: p.color }}>
+        <p
+          key={p.name}
+          className="text-sm font-mono font-medium"
+          style={{ color: p.color }}
+        >
           {p.name}: {formatCurrency(p.value)}
         </p>
       ))}
@@ -29,12 +42,20 @@ export function IncomeExpenseChart() {
 
   const chartData = useMemo(() => {
     const now = new Date();
-    const months: { key: string; label: string; income: number; expense: number }[] = [];
+    const months: {
+      key: string;
+      label: string;
+      income: number;
+      expense: number;
+    }[] = [];
 
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      const label = d.toLocaleDateString("en-US", {
+        month: "short",
+        year: "2-digit",
+      });
       months.push({ key, label, income: 0, expense: 0 });
     }
 
@@ -63,19 +84,61 @@ export function IncomeExpenseChart() {
   }
 
   return (
-    <Card>
-      <h3 className="section-title mb-1">Income vs Expenses</h3>
-      <p className="text-xs text-white/40 mb-6">Last 6 months comparison</p>
-      <div className={cn("transition-all duration-300", privacyMode && "privacy-blur pointer-events-none")}>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barGap={4}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
+    <Card padding="sm" className="h-full">
+      <h3 className="text-sm font-semibold text-white">Income vs Expenses</h3>
+      <p className="text-[11px] text-white/40 mb-3">Last 6 months comparison</p>
+      <div
+        className={cn(
+          "transition-all duration-300",
+          privacyMode && "privacy-blur pointer-events-none",
+        )}
+      >
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+            barGap={4}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.05)"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v: number) =>
+                Math.abs(v) >= 1000
+                  ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`
+                  : String(v)
+              }
+              width={40}
+            />
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }} />
-            <Bar dataKey="income" name="Income" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="expense" name="Expenses" fill="#fb7185" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}
+            />
+            <Bar
+              dataKey="income"
+              name="Income"
+              fill="#34d399"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={28}
+            />
+            <Bar
+              dataKey="expense"
+              name="Expenses"
+              fill="#fb7185"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={28}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

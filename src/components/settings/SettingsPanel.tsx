@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   Globe,
   Shield,
@@ -6,33 +7,68 @@ import {
   Upload,
   Trash2,
   ShieldCheck,
-  AlertTriangle,
+  ShieldAlert,
   Target,
   Sliders,
   Database,
   CalendarDays,
   Sparkles,
+  Check,
+  Coins,
 } from "lucide-react";
-import { useStore } from "../../store/useStore";
+import { useStore, type AppSettings } from "../../store/useStore";
+import { useToastStore } from "../../store/useToastStore";
 import { Card } from "../ui/Card";
 import { Select } from "../ui/FormFields";
 import { Button } from "../ui/Button";
-import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
-import type { Account, Transaction, Budget, SavingsGoal, RecurringBill, Iou } from "../../types";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import {
+  formatCurrency,
+  getFinancialCycle,
+  parseLocalDate,
+  cn,
+} from "../../lib/utils";
+import type {
+  Account,
+  Transaction,
+  Budget,
+  SavingsGoal,
+  RecurringBill,
+  Iou,
+  ExchangeRates,
+} from "../../types";
 
-const CURRENCIES = [
-  { value: "EGP", label: "EGP — Egyptian Pound" },
-  { value: "USD", label: "USD — US Dollar" },
-  { value: "EUR", label: "EUR — Euro" },
-  { value: "GBP", label: "GBP — British Pound" },
-  { value: "SAR", label: "SAR — Saudi Riyal" },
-  { value: "AED", label: "AED — UAE Dirham" },
+type TabId = "general" | "budget" | "data";
+
+interface ImportPayload {
+  accounts: Account[];
+  transactions: Transaction[];
+  budgets?: Budget[];
+  savingsGoals?: SavingsGoal[];
+  recurring?: RecurringBill[];
+  ious?: Iou[];
+  exchangeRates?: ExchangeRates;
+  monthlyBudgetTarget?: number;
+  settings?: Partial<AppSettings>;
+}
+
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: "general", label: "General", icon: Sliders },
+  { id: "budget", label: "Budget", icon: Target },
+  { id: "data", label: "Data", icon: Database },
 ];
 
 const DATE_FORMATS = [
+  { value: "MMM D, YYYY", label: "MMM D, YYYY — Oct 5, 2026 (Default)" },
   { value: "MM/DD/YYYY", label: "MM/DD/YYYY (US)" },
   { value: "DD/MM/YYYY", label: "DD/MM/YYYY (UK/EU)" },
   { value: "YYYY-MM-DD", label: "YYYY-MM-DD (ISO)" },
+];
+
+const WEEK_START_OPTIONS = [
+  { value: "saturday", label: "Saturday (Middle East / Egypt)" },
+  { value: "sunday", label: "Sunday" },
+  { value: "monday", label: "Monday (Standard)" },
 ];
 
 const MONTH_START_DAYS = Array.from({ length: 31 }, (_, i) => {
@@ -41,15 +77,146 @@ const MONTH_START_DAYS = Array.from({ length: 31 }, (_, i) => {
     day === 1 || day === 21 || day === 31
       ? "st"
       : day === 2 || day === 22
-      ? "nd"
-      : day === 3 || day === 23
-      ? "rd"
-      : "th";
+        ? "nd"
+        : day === 3 || day === 23
+          ? "rd"
+          : "th";
   let label = `${day}${suffix} of every month`;
   if (day === 1) label += " (Standard Calendar Month)";
-  if (day === 25 || day === 26 || day === 27 || day === 28) label += " (Common Payday)";
+  if (day >= 25 && day <= 28) label += " (Common Payday)";
   return { value: String(day), label };
 });
+
+const TINTS = {
+  blue: "bg-blue-500/15 text-blue-400",
+  violet: "bg-violet-500/15 text-violet-400",
+  amber: "bg-amber-500/15 text-amber-400",
+  sky: "bg-sky-500/15 text-sky-400",
+  emerald: "bg-emerald-500/15 text-emerald-400",
+  rose: "bg-rose-500/15 text-rose-400",
+} as const;
+
+function formatShortDate(dateStr: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function describeBackupAge(iso: string | null): string {
+  if (!iso) return "Never";
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return "Unknown";
+  const days = Math.floor((Date.now() - time) / 864e5);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
+
+function isOptionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value);
+}
+
+function SectionHeader({
+  icon: Icon,
+  tint,
+  title,
+  description,
+  titleClassName,
+}: {
+  icon: LucideIcon;
+  tint: keyof typeof TINTS;
+  title: string;
+  description: string;
+  titleClassName?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div
+        className={cn(
+          "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+          TINTS[tint],
+        )}
+      >
+        <Icon size={17} aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <h3 className={cn("text-sm font-semibold text-white", titleClassName)}>
+          {title}
+        </h3>
+        <p className="text-xs text-white/40 leading-snug">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function Switch({
+  checked,
+  onChange,
+  labelledBy,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  labelledBy: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-labelledby={labelledBy}
+      onClick={onChange}
+      className={cn(
+        "relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111827]",
+        checked ? "bg-blue-600" : "bg-white/15 hover:bg-white/20",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-200",
+          checked && "translate-x-5",
+        )}
+      />
+    </button>
+  );
+}
+
+function ActionTile({
+  icon: Icon,
+  tint,
+  title,
+  description,
+  onClick,
+}: {
+  icon: LucideIcon;
+  tint: keyof typeof TINTS;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center gap-3 p-3.5 rounded-xl text-left bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:border-white/[0.16] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+    >
+      <div
+        className={cn(
+          "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105",
+          TINTS[tint],
+        )}
+      >
+        <Icon size={18} aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="text-xs text-white/40 leading-snug">{description}</p>
+      </div>
+    </button>
+  );
+}
 
 export function SettingsPanel() {
   const {
@@ -65,42 +232,70 @@ export function SettingsPanel() {
     savingsGoals,
     recurring,
     ious,
+    exchangeRates,
     importData,
     clearAll,
     lastBackupDate,
     isBackupNeeded,
     recordBackup,
   } = useStore();
+  const addToast = useToastStore((s) => s.addToast);
 
-  const [activeTab, setActiveTab] = useState<"general" | "budget" | "data">("general");
+  const privacyLabelId = useId();
+  const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  const currentCycle = getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1);
+  const monthStartsOnDay = settings.monthStartsOnDay ?? 1;
+  const currency = "EGP";
+  const currentCycle = useMemo(
+    () => getFinancialCycle(new Date(), monthStartsOnDay),
+    [monthStartsOnDay],
+  );
 
-  // Budget target state
   const [budgetTargetInput, setBudgetTargetInput] = useState(
     monthlyBudgetTarget > 0 ? String(monthlyBudgetTarget) : "",
   );
-  const [targetSaved, setTargetSaved] = useState(false);
 
-  // Backup & Restore
+  useEffect(() => {
+    setBudgetTargetInput(
+      monthlyBudgetTarget > 0 ? String(monthlyBudgetTarget) : "",
+    );
+  }, [monthlyBudgetTarget]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
-  const [importMsg, setImportMsg] = useState("");
+  const [pendingImport, setPendingImport] = useState<ImportPayload | null>(
+    null,
+  );
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const parsedTarget =
+    budgetTargetInput.trim() === "" ? 0 : Number(budgetTargetInput);
+  const targetValid = Number.isFinite(parsedTarget) && parsedTarget >= 0;
+  const targetDirty = targetValid && parsedTarget !== monthlyBudgetTarget;
+  const benchmarkBase = targetValid ? parsedTarget : monthlyBudgetTarget;
+  const dailyBenchmark = benchmarkBase / Math.max(1, currentCycle.totalDays);
+
+  const backupNeeded = isBackupNeeded();
 
   const handleSaveBudget = (e: React.FormEvent) => {
     e.preventDefault();
-    const val = parseFloat(budgetTargetInput);
-    if (!isNaN(val) && val >= 0) {
-      setMonthlyBudgetTarget(val);
-      setTargetSaved(true);
-      setTimeout(() => setTargetSaved(false), 3000);
+    if (!targetValid) {
+      addToast({ type: "error", message: "Enter a valid amount (0 or more)." });
+      return;
     }
+    setMonthlyBudgetTarget(parsedTarget);
+    addToast({
+      type: "success",
+      message:
+        parsedTarget > 0
+          ? `Monthly target set to ${formatCurrency(parsedTarget, currency)}.`
+          : "Monthly target cleared. Using income as the base.",
+    });
   };
 
   const handleExport = () => {
+    const now = new Date().toISOString();
     const payload = {
-      exportedAt: new Date().toISOString(),
+      exportedAt: now,
       version: "2.0",
       accounts,
       transactions,
@@ -108,8 +303,10 @@ export function SettingsPanel() {
       savingsGoals,
       recurring,
       ious,
+      exchangeRates,
+      settings,
       monthlyBudgetTarget,
-      lastBackupDate: new Date().toISOString(),
+      lastBackupDate: now,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -117,460 +314,560 @@ export function SettingsPanel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `walleteer-backup-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `walleteer-backup-${now.split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     recordBackup();
+    addToast({ type: "success", message: "Backup downloaded." });
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const raw = ev.target?.result as string;
-        const data = JSON.parse(raw) as {
-          accounts: Account[];
-          transactions: Transaction[];
-          budgets?: Budget[];
-          savingsGoals?: SavingsGoal[];
-          recurring?: RecurringBill[];
-          ious?: Iou[];
-          monthlyBudgetTarget?: number;
-        };
-        if (!Array.isArray(data.accounts) || !Array.isArray(data.transactions)) {
-          throw new Error("Invalid file format");
-        }
-        importData({
-          accounts: data.accounts,
-          transactions: data.transactions,
-          budgets: data.budgets,
-          savingsGoals: data.savingsGoals,
-          recurring: data.recurring,
-          ious: data.ious,
-          monthlyBudgetTarget: data.monthlyBudgetTarget,
-        });
-        setImportStatus("success");
-        setImportMsg(
-          `Successfully restored ${data.accounts.length} accounts, ${data.transactions.length} transactions, and ${data.recurring?.length ?? 0} recurring commitments.`,
-        );
-      } catch {
-        setImportStatus("error");
-        setImportMsg("Failed to import. Make sure this is a valid Walleteer JSON backup file.");
+    try {
+      const data = JSON.parse(
+        await file.text(),
+      ) as Partial<ImportPayload> | null;
+      if (
+        !data ||
+        !Array.isArray(data.accounts) ||
+        !Array.isArray(data.transactions) ||
+        !isOptionalArray(data.budgets) ||
+        !isOptionalArray(data.savingsGoals) ||
+        !isOptionalArray(data.recurring) ||
+        !isOptionalArray(data.ious)
+      ) {
+        throw new Error("Invalid file format");
       }
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setTimeout(() => setImportStatus("idle"), 5000);
-    };
-    reader.readAsText(file);
+      setPendingImport({
+        accounts: data.accounts,
+        transactions: data.transactions,
+        budgets: data.budgets,
+        savingsGoals: data.savingsGoals,
+        recurring: data.recurring,
+        ious: data.ious,
+        exchangeRates:
+          data.exchangeRates && typeof data.exchangeRates === "object"
+            ? data.exchangeRates
+            : undefined,
+        monthlyBudgetTarget:
+          typeof data.monthlyBudgetTarget === "number"
+            ? data.monthlyBudgetTarget
+            : undefined,
+        settings:
+          data.settings && typeof data.settings === "object"
+            ? data.settings
+            : undefined,
+      });
+    } catch {
+      addToast({
+        type: "error",
+        message:
+          "Import failed. Make sure this is a valid Walleteer JSON backup file.",
+      });
+    } finally {
+      input.value = "";
+    }
   };
 
-  const backupNeeded = isBackupNeeded();
+  const confirmImport = () => {
+    if (!pendingImport) return;
+    importData(pendingImport);
+    addToast({
+      type: "success",
+      message: `Restored ${pendingImport.accounts.length} accounts and ${pendingImport.transactions.length} transactions.`,
+    });
+    setPendingImport(null);
+  };
+
+  const handleClearAll = () => {
+    clearAll();
+    addToast({ type: "info", message: "All local data has been cleared." });
+  };
+
+  const dataStats = [
+    { label: "Accounts", value: accounts.length },
+    { label: "Transactions", value: transactions.length },
+    { label: "Recurring", value: recurring.length },
+    { label: "Budgets", value: budgets.length },
+  ];
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Top Header */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+    <div className="space-y-4 max-w-5xl mx-auto">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
           Settings & Backup
         </h2>
-        <p className="text-xs sm:text-sm text-white/50 mt-1">
-          Manage your monthly budget targets, personal preferences, and encrypted local data backups.
+        <p className="text-xs text-white/40">
+          Preferences, budget target and local data backups
         </p>
       </div>
 
-      {/* Segmented Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
-        <button
-          onClick={() => setActiveTab("general")}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all",
-            activeTab === "general"
-              ? "bg-white/10 text-white border border-white/15 shadow-sm"
-              : "text-white/45 hover:text-white/80",
-          )}
+      <div className="flex flex-col md:flex-row gap-4 md:gap-5 md:items-start">
+        <div
+          role="tablist"
+          aria-label="Settings sections"
+          aria-orientation="horizontal"
+          className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible md:w-44 flex-shrink-0 pb-1 md:pb-0 md:sticky md:top-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <Sliders size={15} />
-          <span>General & Privacy</span>
-        </button>
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const selected = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`settings-tab-${id}`}
+                aria-selected={selected}
+                aria-controls={`settings-panel-${id}`}
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex-shrink-0 md:flex-shrink md:w-full transition-all",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
+                  selected
+                    ? "bg-white/10 text-white border border-white/15 shadow-sm"
+                    : "text-white/50 border border-transparent hover:text-white/90 hover:bg-white/[0.05]",
+                )}
+              >
+                <Icon size={15} aria-hidden="true" />
+                <span>{label}</span>
+                {id === "budget" && monthlyBudgetTarget > 0 && (
+                  <span
+                    className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400"
+                    title="Budget target active"
+                  />
+                )}
+                {id === "data" && backupNeeded && (
+                  <span
+                    className="ml-auto w-2 h-2 rounded-full bg-amber-400"
+                    title="Backup recommended"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-        <button
-          onClick={() => setActiveTab("budget")}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all",
-            activeTab === "budget"
-              ? "bg-white/10 text-white border border-white/15 shadow-sm"
-              : "text-white/45 hover:text-white/80",
-          )}
+        <div
+          role="tabpanel"
+          id={`settings-panel-${activeTab}`}
+          aria-labelledby={`settings-tab-${activeTab}`}
+          className="flex-1 min-w-0"
         >
-          <Target size={15} />
-          <span>Monthly Budget Target</span>
-          {monthlyBudgetTarget > 0 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-300 font-mono">
-              Active
-            </span>
-          )}
-        </button>
+          {activeTab === "general" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in">
+              <Card padding="sm" className="space-y-3">
+                <SectionHeader
+                  icon={Globe}
+                  tint="blue"
+                  title="Localization"
+                  description="Base currency and date display format"
+                />
+                <div className="space-y-3">
+                  {/* Read-only currency info tile */}
+                  <div className="p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center flex-shrink-0">
+                      <Coins size={17} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">
+                        Base Currency: EGP
+                      </p>
+                      <p className="text-[11px] text-white/40 leading-snug">
+                        All totals are converted to Egyptian Pound. Multi-currency accounts use their exchange rates.
+                      </p>
+                    </div>
+                  </div>
+                  <Select
+                    label="Date Format"
+                    value={settings.dateFormat}
+                    onChange={(e) =>
+                      updateSettings({
+                        dateFormat: e.target.value as
+                          "MMM D, YYYY" | "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD",
+                      })
+                    }
+                    options={DATE_FORMATS}
+                  />
+                </div>
+              </Card>
 
-        <button
-          onClick={() => setActiveTab("data")}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all relative",
-            activeTab === "data"
-              ? "bg-white/10 text-white border border-white/15 shadow-sm"
-              : "text-white/45 hover:text-white/80",
+              <Card padding="sm" className="space-y-3">
+                <SectionHeader
+                  icon={Shield}
+                  tint="violet"
+                  title="Privacy"
+                  description="Blur balances and sensitive figures"
+                />
+                <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="min-w-0">
+                    <p
+                      id={privacyLabelId}
+                      className="text-sm font-medium text-white"
+                    >
+                      Blur sensitive amounts
+                    </p>
+                    <p className="text-xs text-white/40 leading-snug">
+                      {privacyMode
+                        ? "Amounts are hidden."
+                        : "Amounts are visible."}{" "}
+                      You can also toggle it from the eye icon in the header.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={privacyMode}
+                    onChange={togglePrivacyMode}
+                    labelledBy={privacyLabelId}
+                  />
+                </div>
+              </Card>
+
+              <Card padding="sm" className="space-y-3 lg:col-span-2">
+                <SectionHeader
+                  icon={CalendarDays}
+                  tint="amber"
+                  title="Financial Month & Calendar"
+                  description="Align budget cycles and Safe-to-Spend with your payday"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    label="Financial Month Starts On"
+                    value={String(monthStartsOnDay)}
+                    onChange={(e) =>
+                      updateSettings({
+                        monthStartsOnDay: parseInt(e.target.value, 10) || 1,
+                      })
+                    }
+                    options={MONTH_START_DAYS}
+                  />
+                  <Select
+                    label="Week Starts On"
+                    value={settings.weekStartsOn}
+                    onChange={(e) =>
+                      updateSettings({
+                        weekStartsOn: e.target.value as
+                          "sunday" | "monday" | "saturday",
+                      })
+                    }
+                    options={WEEK_START_OPTIONS}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="sm:col-span-1 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      <Sparkles
+                        size={12}
+                        className="text-blue-400"
+                        aria-hidden="true"
+                      />
+                      Active cycle
+                    </span>
+                    <span className="block mt-1 font-mono font-bold text-blue-300 text-sm">
+                      {currentCycle.cycleLabel}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <span className="block text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      Cycle progress
+                    </span>
+                    <span className="block mt-1 font-mono font-bold text-white text-sm">
+                      Day {currentCycle.currentDayInCycle} of{" "}
+                      {currentCycle.totalDays}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="block text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      Next payday
+                    </span>
+                    <span className="block mt-1 font-mono font-bold text-emerald-400 text-sm">
+                      {formatShortDate(currentCycle.nextPaydayDate)}
+                      <span className="ml-1.5 text-[11px] font-semibold text-emerald-400/70">
+                        {currentCycle.daysUntilPayday === 0
+                          ? "today"
+                          : `in ${currentCycle.daysUntilPayday} ${currentCycle.daysUntilPayday === 1 ? "day" : "days"}`}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            </div>
           )}
-        >
-          <Database size={15} />
-          <span>Data & Backup</span>
-          {backupNeeded && (
-            <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0B0F17]" />
+
+          {activeTab === "budget" && (
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 animate-fade-in">
+              <Card
+                padding="sm"
+                className="lg:col-span-3 space-y-4 bg-gradient-to-br from-[#121624] via-[#0E121E] to-[#111827] border-blue-500/20"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 flex-shrink-0">
+                    <Target size={18} aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white">
+                      Monthly Spending Limit
+                    </h3>
+                    <p className="text-xs text-white/50 leading-snug mt-0.5">
+                      Safe-to-Spend uses this as its baseline. Set it to 0 to
+                      use your cycle-to-date income instead.
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={handleSaveBudget}
+                  className="space-y-3"
+                  noValidate
+                >
+                  <div>
+                    <label
+                      htmlFor="monthly-budget-target"
+                      className="label-base"
+                    >
+                      Monthly Spending Ceiling ({currency})
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="monthly-budget-target"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        value={budgetTargetInput}
+                        onChange={(e) => setBudgetTargetInput(e.target.value)}
+                        placeholder="e.g. 25000 (0 = automatic)"
+                        aria-invalid={!targetValid}
+                        className={cn(
+                          "input-base text-lg font-mono font-bold pl-4 pr-16",
+                          !targetValid && "border-rose-500/50",
+                        )}
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-white/40 pointer-events-none">
+                        {currency}
+                      </span>
+                    </div>
+                    {!targetValid && (
+                      <p role="alert" className="mt-1.5 text-xs text-rose-400">
+                        Enter a valid amount (0 or more).
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      icon={<Check size={15} aria-hidden="true" />}
+                      disabled={!targetDirty}
+                    >
+                      Save Target
+                    </Button>
+                    {targetDirty && (
+                      <span className="text-xs text-amber-300/80">
+                        Unsaved changes
+                      </span>
+                    )}
+                  </div>
+                </form>
+              </Card>
+
+              <Card padding="sm" className="lg:col-span-2 space-y-3">
+                <SectionHeader
+                  icon={CalendarDays}
+                  tint="sky"
+                  title="Current Cycle"
+                  description={currentCycle.cycleLabel}
+                />
+                <dl className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="col-span-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <dt className="text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      Daily benchmark
+                    </dt>
+                    <dd
+                      className={cn(
+                        "mt-1 font-mono font-bold text-white text-base",
+                        privacyMode && "privacy-blur",
+                      )}
+                    >
+                      {benchmarkBase > 0
+                        ? `~${formatCurrency(Math.round(dailyBenchmark), currency)} / day`
+                        : "Automatic"}
+                    </dd>
+                    <dd className="text-[11px] text-white/40 mt-0.5">
+                      {benchmarkBase > 0
+                        ? `Spread over ${currentCycle.totalDays} days`
+                        : "Based on cycle income"}
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <dt className="text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      Days left
+                    </dt>
+                    <dd className="mt-1 font-mono font-bold text-white text-sm">
+                      {currentCycle.remainingDays}
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <dt className="text-[10px] uppercase tracking-wider font-semibold text-white/40">
+                      Next payday
+                    </dt>
+                    <dd className="mt-1 font-mono font-bold text-emerald-400 text-sm">
+                      {formatShortDate(currentCycle.nextPaydayDate)}
+                    </dd>
+                  </div>
+                </dl>
+              </Card>
+            </div>
           )}
-        </button>
+
+          {activeTab === "data" && (
+            <div className="space-y-4 animate-fade-in">
+              <Card
+                padding="sm"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0",
+                      backupNeeded ? TINTS.amber : TINTS.emerald,
+                    )}
+                  >
+                    {backupNeeded ? (
+                      <ShieldAlert size={17} aria-hidden="true" />
+                    ) : (
+                      <ShieldCheck size={17} aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-white">
+                        Backup health
+                      </h3>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                          backupNeeded
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+                        )}
+                      >
+                        {backupNeeded ? "Backup recommended" : "Up to date"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/40">
+                      Last backup:{" "}
+                      <span
+                        className="font-mono text-white/70"
+                        title={
+                          lastBackupDate
+                            ? new Date(lastBackupDate).toLocaleString()
+                            : undefined
+                        }
+                      >
+                        {describeBackupAge(lastBackupDate)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="flex items-center gap-4 text-xs sm:flex-shrink-0">
+                  {dataStats.map((s) => (
+                    <div key={s.label} className="text-left sm:text-right">
+                      <dd className="font-mono font-bold text-white text-sm leading-none">
+                        {s.value}
+                      </dd>
+                      <dt className="text-[10px] text-white/40 mt-1">
+                        {s.label}
+                      </dt>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+
+              <Card padding="sm" className="space-y-3">
+                <SectionHeader
+                  icon={Database}
+                  tint="blue"
+                  title="Backup & Restore"
+                  description="Backups are JSON files stored on your device"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                  aria-label="Import backup file"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ActionTile
+                    icon={Download}
+                    tint="blue"
+                    title="Export backup"
+                    description="Download all data as JSON"
+                    onClick={handleExport}
+                  />
+                  <ActionTile
+                    icon={Upload}
+                    tint="sky"
+                    title="Import backup"
+                    description="Replace data from a JSON file"
+                    onClick={() => fileInputRef.current?.click()}
+                  />
+                </div>
+              </Card>
+
+              <Card
+                padding="sm"
+                className="border-rose-500/25 bg-rose-500/[0.04] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <SectionHeader
+                  icon={Trash2}
+                  tint="rose"
+                  title="Danger zone"
+                  titleClassName="text-rose-400"
+                  description="Permanently erase all accounts, transactions and settings on this device"
+                />
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 size={14} aria-hidden="true" />}
+                  onClick={() => setShowClearConfirm(true)}
+                  className="sm:flex-shrink-0"
+                >
+                  Clear All Data
+                </Button>
+              </Card>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* TAB 1: GENERAL & PRIVACY */}
-      {activeTab === "general" && (
-        <div className="space-y-5 animate-fade-in">
-          {/* Currency & Formats */}
-          <Card className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400">
-                <Globe size={18} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">Localization & Currency</h3>
-                <p className="text-xs text-white/40">Select your default baseline currency and formatting</p>
-              </div>
-            </div>
+      <ConfirmDialog
+        isOpen={pendingImport !== null}
+        onClose={() => setPendingImport(null)}
+        onConfirm={confirmImport}
+        title="Replace current data?"
+        message={
+          pendingImport
+            ? `This backup contains ${pendingImport.accounts.length} accounts and ${pendingImport.transactions.length} transactions. Importing will overwrite everything currently stored on this device.`
+            : ""
+        }
+        confirmLabel="Import & Replace"
+        variant="primary"
+      />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <Select
-                label="Base Currency"
-                value={settings.defaultCurrency}
-                onChange={(e) => updateSettings({ defaultCurrency: e.target.value })}
-                options={CURRENCIES}
-              />
-              <Select
-                label="Date Format"
-                value={settings.dateFormat}
-                onChange={(e) =>
-                  updateSettings({
-                    dateFormat: e.target.value as "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD",
-                  })
-                }
-                options={DATE_FORMATS}
-              />
-            </div>
-          </Card>
-
-          {/* Privacy Switch */}
-          <Card className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center text-violet-400">
-                <Shield size={18} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">Privacy Mode</h3>
-                <p className="text-xs text-white/40">Conceal all numbers and sensitive balance figures with a subtle blur</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 py-2 pt-1 border-t border-white/[0.04]">
-              <div>
-                <p className="text-sm font-medium text-white">Blur Sensitive Amounts</p>
-                <p className="text-xs text-white/40">You can also toggle this at any time using the Eye icon in the top header</p>
-              </div>
-              <button
-                onClick={togglePrivacyMode}
-                role="switch"
-                aria-checked={privacyMode ? "true" : "false"}
-                aria-label="Toggle privacy mode"
-                className={`relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ${
-                  privacyMode ? "bg-blue-600" : "bg-white/10"
-                }`}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform duration-200 shadow-md ${
-                    privacyMode ? "translate-x-5" : ""
-                  }`}
-                />
-              </button>
-            </div>
-          </Card>
-
-          {/* Financial Month & Calendar settings */}
-          <Card className="space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
-                <CalendarDays size={18} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">Financial Month & Calendar</h3>
-                <p className="text-xs text-white/40">Align your budget cycles and Safe-to-Spend with your payday</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Financial Month Starts On"
-                value={String(settings.monthStartsOnDay ?? 1)}
-                onChange={(e) =>
-                  updateSettings({
-                    monthStartsOnDay: parseInt(e.target.value, 10) || 1,
-                  })
-                }
-                options={MONTH_START_DAYS}
-              />
-
-              <Select
-                label="Week Starts On"
-                value={settings.weekStartsOn}
-                onChange={(e) =>
-                  updateSettings({
-                    weekStartsOn: e.target.value as "sunday" | "monday" | "saturday",
-                  })
-                }
-                options={[
-                  { value: "saturday", label: "Saturday (Middle East / Egypt)" },
-                  { value: "sunday", label: "Sunday" },
-                  { value: "monday", label: "Monday (Standard)" },
-                ]}
-              />
-            </div>
-
-            {/* Live Cycle Preview */}
-            <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-transparent border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white flex items-center gap-1.5">
-                    <Sparkles size={13} className="text-blue-400" />
-                    Active Financial Cycle:
-                  </span>
-                  <span className="font-mono font-bold text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-md">
-                    {currentCycle.cycleLabel}
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/50">
-                  {settings.monthStartsOnDay && settings.monthStartsOnDay > 1
-                    ? `Your financial month begins on day ${settings.monthStartsOnDay}. All spending budgets and cashflow align with this salary window.`
-                    : "Standard calendar month cycle (1st to end of month)."}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 sm:border-l sm:border-white/10 sm:pl-4 flex-shrink-0">
-                <div className="text-left sm:text-right">
-                  <span className="block text-[10px] text-white/40 uppercase tracking-wider font-semibold">
-                    Next Payday
-                  </span>
-                  <span className="font-mono font-bold text-emerald-400 text-sm">
-                    {currentCycle.remainingDays} {currentCycle.remainingDays === 1 ? "day" : "days"} left
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* TAB 2: MONTHLY BUDGET TARGET & CFO ENGINE */}
-      {activeTab === "budget" && (
-        <div className="space-y-5 animate-fade-in">
-          <Card className="p-6 relative overflow-hidden bg-gradient-to-br from-[#121624] via-[#0E121E] to-transparent border-blue-500/20">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 flex-shrink-0">
-                <Target size={22} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-white">Monthly Target Spending Limit</h3>
-                <p className="text-xs text-white/50 mt-1">
-                  The Safe-to-Spend engine calculates your daily allowance using this baseline. If set to 0, Walleteer automatically uses your real Month-to-Date income as the base.
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveBudget} className="mt-6 space-y-4">
-              <div>
-                <label className="label-base">Monthly Spending Ceiling (EGP)</label>
-                <div className="relative mt-1">
-                  <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    value={budgetTargetInput}
-                    onChange={(e) => setBudgetTargetInput(e.target.value)}
-                    placeholder="e.g. 25000 (0 for automatic income base)"
-                    className="input-base text-lg font-mono font-bold pl-4 pr-16"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-white/40">
-                    EGP
-                  </span>
-                </div>
-              </div>
-
-              {monthlyBudgetTarget > 0 && (
-                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-center justify-between">
-                  <span className="text-blue-300">Target Daily Benchmark:</span>
-                  <span className="font-mono font-bold text-white">
-                    ~{formatCurrency(Math.round(monthlyBudgetTarget / 30), "EGP")} / day
-                  </span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 pt-2">
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white">
-                  Save Budget Target
-                </Button>
-                {targetSaved && (
-                  <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-fade-in">
-                    <ShieldCheck size={14} />
-                    Target updated successfully!
-                  </span>
-                )}
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
-
-      {/* TAB 3: DATA & BACKUP */}
-      {activeTab === "data" && (
-        <div className="space-y-5 animate-fade-in">
-          {/* Status Message */}
-          {importStatus !== "idle" && (
-            <div
-              className={`flex items-start gap-3 p-4 rounded-xl border text-sm animate-slide-up ${
-                importStatus === "success"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-rose-500/10 border-rose-500/20 text-rose-400"
-              }`}
-            >
-              {importStatus === "success" ? (
-                <ShieldCheck size={18} className="flex-shrink-0 mt-0.5" />
-              ) : (
-                <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
-              )}
-              {importMsg}
-            </div>
-          )}
-
-          {/* Backup Health Bar */}
-          <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">Backup Health Status</h3>
-                {backupNeeded ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Backup Recommended
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Up to Date
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-white/40 mt-1">
-                Last recorded backup:{" "}
-                <span className="font-mono text-white/70">
-                  {lastBackupDate ? new Date(lastBackupDate).toLocaleDateString() : "Never"}
-                </span>
-              </p>
-            </div>
-
-            <Button
-              icon={<Download size={15} />}
-              onClick={handleExport}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs self-start sm:self-auto shadow-md shadow-blue-600/20"
-            >
-              Download Backup JSON
-            </Button>
-          </Card>
-
-          {/* Restore */}
-          <Card className="space-y-4">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/15 flex items-center justify-center text-sky-400 flex-shrink-0">
-                <Upload size={18} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-white">Restore from Backup</h3>
-                <p className="text-xs text-white/50 mt-1">
-                  Upload a previously saved Walleteer backup file. This will restore all accounts, transaction ledgers, recurring bills, and preferences.
-                </p>
-              </div>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleImport}
-              className="hidden"
-              aria-label="Import backup file"
-            />
-            <Button
-              variant="ghost"
-              icon={<Upload size={15} />}
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full sm:w-auto text-xs"
-            >
-              Choose Backup File to Restore
-            </Button>
-          </Card>
-
-          {/* Danger Zone */}
-          <Card className="border-rose-500/20 space-y-4">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-400 flex-shrink-0">
-                <Trash2 size={18} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-rose-400">Danger Zone: Reset App</h3>
-                <p className="text-xs text-white/50 mt-1">
-                  Permanently clear all accounts, transactions, subscriptions, and settings from local device storage.
-                </p>
-              </div>
-            </div>
-
-            {showClearConfirm ? (
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-3">
-                <p className="text-xs text-rose-300 font-medium">
-                  Are you absolutely certain? This will wipe all data on this browser. Make sure you downloaded a backup first!
-                </p>
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowClearConfirm(false)}
-                    className="flex-1 text-xs"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => {
-                      clearAll();
-                      setShowClearConfirm(false);
-                    }}
-                  >
-                    Yes, Delete Everything
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                variant="danger"
-                icon={<Trash2 size={14} />}
-                onClick={() => setShowClearConfirm(true)}
-                className="text-xs"
-              >
-                Clear All Data
-              </Button>
-            )}
-          </Card>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={handleClearAll}
+        title="Delete all data?"
+        message="This will wipe all data on this browser and cannot be undone. Make sure you downloaded a backup first."
+        confirmLabel="Yes, Delete Everything"
+      />
     </div>
   );
 }

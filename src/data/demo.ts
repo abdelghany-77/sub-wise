@@ -1,8 +1,8 @@
 import type { Account, Transaction } from "../types";
 import { ACCOUNT_TYPE_COLORS } from "../types";
+import { addDaysISO } from "../lib/utils";
 
-const generateDelta = (days: number) =>
-  new Date(Date.now() - days * 864e5).toISOString().split("T")[0];
+const generateDelta = (days: number) => addDaysISO(-days);
 
 export const DEMO_ACCOUNTS: Account[] = [
   {

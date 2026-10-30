@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Coins, Eye, EyeOff, Plus, Settings, Search, Command } from "lucide-react";
+import { Coins, Eye, EyeOff, Plus, Search, Command } from "lucide-react";
 import { DashboardBentoView } from "../dashboard/DashboardBentoView";
 import { AccountsPanel } from "../accounts/AccountsPanel";
 import { TransactionHistory } from "../transactions/TransactionHistory";
@@ -33,7 +33,7 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
-  const { privacyMode, togglePrivacyMode, isBackupNeeded } = useStore();
+  const { privacyMode, togglePrivacyMode } = useStore();
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
   // Global Cmd+K / Ctrl+K listener
@@ -48,10 +48,8 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const backupAlert = isBackupNeeded();
-
   return (
-    <main className="flex-1 overflow-y-auto min-h-0 pb-28 md:pb-8">
+    <main className="flex-1 overflow-y-auto min-h-0">
       {/* Top Bar */}
       <header className="sticky top-0 z-20 bg-[#080B10]/85 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -77,7 +75,9 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
             aria-label="Open command palette"
           >
             <Search size={14} className="text-white/40" />
-            <span className="hidden md:inline text-white/50">Search or command...</span>
+            <span className="hidden md:inline text-white/50">
+              Search or command...
+            </span>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/60">
               <Command size={10} />K
             </kbd>
@@ -92,30 +92,16 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
             <span>Add Transaction</span>
           </button>
 
-          {/* Mobile quick access to Settings & Backup */}
-          <div className="md:hidden flex items-center gap-1">
-            <button
-              onClick={() => onChangePage("settings")}
-              aria-label="Settings & Backup"
-              className={`p-2 rounded-xl transition-all duration-200 relative ${
-                page === "settings" || page === "data"
-                  ? "bg-blue-500/20 text-blue-400"
-                  : "text-white/40 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <Settings size={18} />
-              {backupAlert && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0B0F17]" />
-              )}
-            </button>
-          </div>
-
           {/* Privacy Toggle */}
           <button
             onClick={togglePrivacyMode}
             aria-label={privacyMode ? "Show balances" : "Hide balances"}
             aria-pressed={privacyMode ? "true" : "false"}
-            title={privacyMode ? "Privacy Mode Active (Balances Blurred)" : "Toggle Privacy Mode"}
+            title={
+              privacyMode
+                ? "Privacy Mode Active (Balances Blurred)"
+                : "Toggle Privacy Mode"
+            }
             className={`p-2 rounded-xl transition-all duration-200 ${
               privacyMode
                 ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30"
@@ -128,12 +114,16 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
       </header>
 
       {/* Main Page Content - Standardized Breathing Room */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-28 md:pb-10 animate-fade-in">
-        {page === "dashboard" && <DashboardBentoView onNavigate={onChangePage} />}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 space-y-4 pb-28 md:pb-8 animate-fade-in">
+        {page === "dashboard" && (
+          <DashboardBentoView onNavigate={onChangePage} />
+        )}
         {page === "accounts" && <AccountsPanel />}
         {page === "transactions" && <TransactionHistory />}
         {page === "commitments" && <CommitmentsPanel />}
-        {page === "subscriptions" && <CommitmentsPanel initialTab="subscriptions" />}
+        {page === "subscriptions" && (
+          <CommitmentsPanel initialTab="subscriptions" />
+        )}
         {page === "ious" && <CommitmentsPanel initialTab="ious" />}
         {page === "budgets" && <BudgetsPanel />}
         {page === "goals" && <SavingsGoalsPanel />}

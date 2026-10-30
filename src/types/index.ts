@@ -9,7 +9,8 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   investment: "Investment",
 };
 
-export type AssetType = "standard" | "foreign_currency" | "gold_24k" | "gold_21k";
+export type AssetType =
+  "standard" | "foreign_currency" | "gold_24k" | "gold_21k";
 
 export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   standard: "Standard (EGP)",
@@ -222,7 +223,7 @@ export interface Account {
   currency: string;
   color: string;
   createdAt: string;
-  
+
   // Fintech Personal CFO extensions:
   assetType?: AssetType;
   unitBalance?: number; // e.g. 500 for $500, or 10 for 10 grams Gold
@@ -246,7 +247,7 @@ export interface Transaction {
   recurrenceFrequency?: "daily" | "weekly" | "monthly" | "yearly";
   recurrenceEndDate?: string;
   parentRecurringId?: string; // links generated transactions to the template
-  
+
   // Next-Gen flags
   isReconciliation?: boolean;
   isIou?: boolean;
@@ -287,6 +288,8 @@ export interface RecurringBill {
   icon?: string;
   createdAt: string;
   status?: "active" | "paused";
+  /** Preferred day of month, so Jan 31 -> Feb 28 -> Mar 31 doesn't drift. */
+  anchorDay?: number;
 }
 
 export type IouType = "lent" | "borrowed";

@@ -90,10 +90,12 @@ export function BalanceTrendChart() {
 
   if (chartData.length < 2) {
     return (
-      <Card className="h-[320px] flex flex-col justify-between p-4 sm:p-5">
+      <Card className="h-full min-h-[270px] flex flex-col justify-between p-4 sm:p-5">
         <div>
           <h3 className="text-sm font-semibold text-white">Balance Trend</h3>
-          <p className="text-[11px] text-white/40">Historical balance progression</p>
+          <p className="text-[11px] text-white/40">
+            Historical balance progression
+          </p>
         </div>
         <div className="flex-1 flex items-center justify-center text-white/30 text-xs">
           Need at least 2 transactions to display trend
@@ -103,10 +105,12 @@ export function BalanceTrendChart() {
   }
 
   return (
-    <Card className="h-[320px] flex flex-col justify-between p-4 sm:p-5">
+    <Card className="h-full min-h-[270px] flex flex-col justify-between p-4 sm:p-5">
       <div>
         <h3 className="text-sm font-semibold text-white">Balance Trend</h3>
-        <p className="text-[11px] text-white/40">Historical balance progression</p>
+        <p className="text-[11px] text-white/40">
+          Historical balance progression
+        </p>
       </div>
 
       <div
@@ -142,8 +146,12 @@ export function BalanceTrendChart() {
               tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-              width={35}
+              tickFormatter={(v: number) =>
+                Math.abs(v) >= 1000
+                  ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`
+                  : String(v)
+              }
+              width={38}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area

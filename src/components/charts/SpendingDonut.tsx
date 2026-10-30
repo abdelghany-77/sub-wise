@@ -87,7 +87,7 @@ export function SpendingDonut() {
 
   if (data.length === 0) {
     return (
-      <Card className="h-[320px] flex flex-col justify-between p-4 sm:p-5">
+      <Card className="h-full min-h-[270px] flex flex-col justify-between p-4 sm:p-5">
         <div>
           <h3 className="text-sm font-semibold text-white">Category Breakdown</h3>
           <p className="text-[11px] text-white/40">{cycle.cycleLabel}</p>
@@ -100,7 +100,7 @@ export function SpendingDonut() {
   }
 
   return (
-    <Card className="h-[320px] flex flex-col justify-between p-4 sm:p-5">
+    <Card className="h-full min-h-[270px] flex flex-col justify-between p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Category Breakdown</h3>
