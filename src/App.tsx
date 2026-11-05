@@ -3,6 +3,7 @@ import { Sidebar, type Page } from "./components/layout/Sidebar";
 import { MainContent } from "./components/layout/MainContent";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { ToastContainer } from "./components/ui/Toast";
+import { OfflineBanner } from "./components/ui/OfflineBanner";
 import { AddTransactionModal } from "./components/transactions/AddTransactionModal";
 import { useStore } from "./store/useStore";
 import "./index.css";
@@ -90,6 +91,7 @@ function AppContent() {
         />
       )}
       <ToastContainer />
+      <OfflineBanner />
     </div>
   );
 }
