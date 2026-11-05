@@ -72,6 +72,35 @@ function AppContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Prevent zoom gestures (pinch-to-zoom and multi-touch zoom on mobile/Safari/desktop)
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    };
+
+    const handleGestureStart = (e: Event) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("wheel", handleWheel, { passive: false });
+    document.addEventListener("gesturestart", handleGestureStart);
+
+    return () => {
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("wheel", handleWheel);
+      document.removeEventListener("gesturestart", handleGestureStart);
+    };
+  }, []);
+
   return (
     <div className="flex h-[100dvh] bg-[#0B0F17] overflow-hidden text-white font-sans antialiased selection:bg-blue-500/30 selection:text-blue-200">
       <Sidebar
