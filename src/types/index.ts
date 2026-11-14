@@ -1,12 +1,21 @@
-export type AccountType = "bank" | "wallet" | "card" | "savings" | "investment";
+export type AccountType =
+  | "bank"
+  | "wallet"
+  | "debit_card"
+  | "card"
+  | "cash"
+  | "savings"
+  | "investment";
 export type TransactionType = "income" | "expense" | "transfer";
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  bank: "Bank Account",
-  wallet: "Digital Wallet",
-  card: "Credit Card",
-  savings: "Savings",
-  investment: "Investment",
+  bank: "Bank Account (حساب بنكي)",
+  wallet: "Digital Wallet (محفظة إلكترونية)",
+  debit_card: "Debit Card (بطاقة خصم مباشر)",
+  card: "Credit Card (بطاقة ائتمان)",
+  cash: "Cash (نقدي)",
+  savings: "Savings (مدخرات)",
+  investment: "Investment (استثمار)",
 };
 
 export type AssetType =
@@ -136,6 +145,7 @@ export const CARD_THEMES: Record<CardBrandTheme, CardThemeConfig> = {
 
 export const EXPENSE_CATEGORIES = [
   "Food & Dining",
+  "Groceries",
   "Shopping",
   "Transportation",
   "Housing & Rent",
@@ -147,6 +157,13 @@ export const EXPENSE_CATEGORIES = [
   "Personal Care",
   "Insurance",
   "Subscriptions",
+  "Bills & Fees",
+  "Family & Kids",
+  "Gifts & Donations",
+  "Debt & Loan Payments",
+  "Vehicle & Maintenance",
+  "Technology & Software",
+  "Work & Business",
   "Sadaqah",
   "Other",
 ] as const;
@@ -168,13 +185,16 @@ export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 export const ACCOUNT_TYPE_COLORS: Record<AccountType, string> = {
   bank: "#7c3aed",
   wallet: "#0ea5e9",
+  debit_card: "#06b6d4",
   card: "#f59e0b",
+  cash: "#10b981",
   savings: "#10b981",
   investment: "#ec4899",
 };
 
 export const CATEGORY_COLORS: Record<string, string> = {
   "Food & Dining": "#f97316",
+  Groceries: "#10b981",
   Shopping: "#8b5cf6",
   Transportation: "#3b82f6",
   "Housing & Rent": "#ef4444",
@@ -186,6 +206,13 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Personal Care": "#a855f7",
   Insurance: "#6b7280",
   Subscriptions: "#f43f5e",
+  "Bills & Fees": "#eab308",
+  "Family & Kids": "#f472b6",
+  "Gifts & Donations": "#fb7185",
+  "Debt & Loan Payments": "#dc2626",
+  "Vehicle & Maintenance": "#64748b",
+  "Technology & Software": "#38bdf8",
+  "Work & Business": "#6366f1",
   Other: "#94a3b8",
   Salary: "#10b981",
   Freelance: "#22d3ee",

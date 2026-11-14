@@ -51,7 +51,7 @@ export function MainContent({ page, onChangePage, onOpenQuickAdd }: Props) {
   return (
     <main className="flex-1 overflow-y-auto min-h-0">
       {/* Top Bar */}
-      <header className="sticky top-0 z-20 bg-[#080B10]/85 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-20 bg-[#080B10]/85 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 lg:px-8 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] sm:h-16 sm:pt-0 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {/* Mobile Logo — visible when desktop sidebar is hidden */}
           <div className="md:hidden flex items-center gap-2 flex-shrink-0">

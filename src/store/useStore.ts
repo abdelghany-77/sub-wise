@@ -24,6 +24,8 @@ import {
 } from "../lib/utils";
 import { DEMO_ACCOUNTS, DEMO_TRANSACTIONS } from "../data/demo";
 import { useToastStore } from "./useToastStore";
+import { safeStorage } from "../lib/safeStorage";
+import { NotificationService } from "../lib/NotificationService";
 
 // Migrate localStorage key from old "subwise-wealth-data" to "walleteer-wealth-data"
 (function migrateStorageKey() {
@@ -45,6 +47,7 @@ export interface AppSettings {
   dateFormat: "MMM D, YYYY" | "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
   weekStartsOn: "sunday" | "monday" | "saturday";
   monthStartsOnDay: number; // 1 to 31 (e.g. 26 for salary payday)
+  notificationsEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -52,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   dateFormat: "MMM D, YYYY",
   weekStartsOn: "saturday",
   monthStartsOnDay: 1,
+  notificationsEnabled: true,
 };
 
 export const INITIAL_RECURRING: RecurringBill[] = [
@@ -324,6 +328,12 @@ export const useStore = create<WealthState>()(
           const next = { ...s.settings, ...updates };
           if (updates.dateFormat) {
             setDateFormatPreference(next.dateFormat);
+          }
+          if (updates.notificationsEnabled !== undefined) {
+            NotificationService.syncAllBillReminders(
+              s.recurring,
+              next.notificationsEnabled
+            ).catch(() => {});
           }
           return { settings: next };
         });
@@ -667,6 +677,9 @@ export const useStore = create<WealthState>()(
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ recurring: [...s.recurring, newBill] }));
+        if (get().settings.notificationsEnabled !== false) {
+          NotificationService.scheduleBillReminder(newBill).catch(() => {});
+        }
         useToastStore.getState().addToast({
           type: "success",
           message: `Recurring bill "${bill.name}" added successfully`,
@@ -688,6 +701,10 @@ export const useStore = create<WealthState>()(
               : r,
           ),
         }));
+        const updated = get().recurring.find((r) => r.id === id);
+        if (updated && get().settings.notificationsEnabled !== false) {
+          NotificationService.scheduleBillReminder(updated).catch(() => {});
+        }
         useToastStore.getState().addToast({
           type: "info",
           message: `Recurring commitment updated`,
@@ -708,6 +725,11 @@ export const useStore = create<WealthState>()(
             r.id === id ? { ...r, status: nextStatus } : r,
           ),
         }));
+        if (nextStatus === "active" && get().settings.notificationsEnabled !== false) {
+          NotificationService.scheduleBillReminder({ ...bill, status: "active" }).catch(() => {});
+        } else {
+          NotificationService.cancelBillReminder(bill.id).catch(() => {});
+        }
         useToastStore.getState().addToast({
           type: "info",
           message: `"${bill.name}" is now ${nextStatus === "active" ? "Active" : "Paused"}`,
@@ -715,6 +737,7 @@ export const useStore = create<WealthState>()(
       },
 
       deleteRecurringBill: (id) => {
+        NotificationService.cancelBillReminder(id).catch(() => {});
         set((s) => ({
           recurring: s.recurring.filter((r) => r.id !== id),
         }));
@@ -763,6 +786,11 @@ export const useStore = create<WealthState>()(
             r.id === id ? { ...r, nextDueDate: nextDate, anchorDay } : r,
           ),
         }));
+
+        const updatedBill = get().recurring.find((r) => r.id === id);
+        if (updatedBill && get().settings.notificationsEnabled !== false) {
+          NotificationService.scheduleBillReminder(updatedBill).catch(() => {});
+        }
 
         useToastStore.getState().addToast({
           type: "success",
@@ -1209,7 +1237,7 @@ export const useStore = create<WealthState>()(
     {
       name: "walleteer-wealth-data",
       version: 3,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStorage),
       migrate: (persistedState: unknown, version: number) => {
         if (!persistedState || typeof persistedState !== "object") {
           return persistedState;

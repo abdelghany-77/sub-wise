@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useStore } from "../../store/useStore";
+import { registerBackHandler } from "../../lib/backButtonManager";
 
 export type Page =
   | "dashboard"
@@ -121,7 +122,14 @@ export function Sidebar({ current, onChange, onOpenQuickAdd }: Props) {
       if (e.key === "Escape") setMoreOpen(false);
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const unregisterBack = registerBackHandler(() => {
+      setMoreOpen(false);
+      return true;
+    });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      unregisterBack();
+    };
   }, [moreOpen]);
 
   // Upcoming bills count in next 7 days

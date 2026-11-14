@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { registerBackHandler } from "../../lib/backButtonManager";
 
 interface Props {
   isOpen: boolean;
@@ -94,6 +95,16 @@ export function Modal({
     return () => document.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
 
+  // Android hardware back button handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const unregister = registerBackHandler(() => {
+      onClose();
+      return true;
+    });
+    return unregister;
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return createPortal(
@@ -122,7 +133,7 @@ export function Modal({
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-white/[0.07] flex-shrink-0">
+        <div className="flex items-center justify-between px-5 sm:px-6 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 sm:py-5 border-b border-white/[0.07] flex-shrink-0">
           <h2 className="text-base sm:text-lg font-semibold text-white">
             {title}
           </h2>

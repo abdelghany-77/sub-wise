@@ -9,6 +9,12 @@ import {
   ArrowDownLeft,
   Check,
   Coins,
+  CreditCard,
+  Landmark,
+  Banknote,
+  PiggyBank,
+  TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -28,6 +34,48 @@ import {
   ASSET_TYPE_LABELS,
   CARD_THEMES,
 } from "../../types";
+
+export function getAccountTypeIcon(type: AccountType): LucideIcon {
+  switch (type) {
+    case "debit_card":
+      return CreditCard;
+    case "card":
+      return CreditCard;
+    case "bank":
+      return Landmark;
+    case "wallet":
+      return Wallet;
+    case "cash":
+      return Banknote;
+    case "savings":
+      return PiggyBank;
+    case "investment":
+      return TrendingUp;
+    default:
+      return CreditCard;
+  }
+}
+
+export function getAccountTypeBadgeClass(type: AccountType): string {
+  switch (type) {
+    case "debit_card":
+      return "bg-cyan-500/30 text-cyan-200 border-cyan-400/40 shadow-sm shadow-cyan-950/40";
+    case "card":
+      return "bg-amber-500/25 text-amber-200 border-amber-400/35";
+    case "bank":
+      return "bg-purple-500/25 text-purple-200 border-purple-400/35";
+    case "wallet":
+      return "bg-sky-500/25 text-sky-200 border-sky-400/35";
+    case "cash":
+      return "bg-emerald-500/25 text-emerald-200 border-emerald-400/35";
+    case "savings":
+      return "bg-emerald-500/25 text-emerald-200 border-emerald-400/35";
+    case "investment":
+      return "bg-pink-500/25 text-pink-200 border-pink-400/35";
+    default:
+      return "bg-black/25 text-white/80 border-white/15";
+  }
+}
 
 function ContactlessChip({ chipColor = "#F59E0B" }: { chipColor?: string }) {
   return (
@@ -585,9 +633,20 @@ export function AccountsPanel() {
                     >
                       {account.name}
                     </h3>
-                    <span className="flex-shrink-0 px-1.5 py-px rounded-md text-[9px] font-semibold uppercase tracking-wide bg-black/25 text-white/80 border border-white/15">
-                      {ACCOUNT_TYPE_LABELS[account.type]}
-                    </span>
+                    {(() => {
+                      const TypeIcon = getAccountTypeIcon(account.type);
+                      return (
+                        <span
+                          className={cn(
+                            "flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-bold uppercase tracking-wide border",
+                            getAccountTypeBadgeClass(account.type),
+                          )}
+                        >
+                          <TypeIcon size={10} strokeWidth={2.5} />
+                          <span>{ACCOUNT_TYPE_LABELS[account.type]}</span>
+                        </span>
+                      );
+                    })()}
                   </div>
                   <span className="font-mono text-xs tracking-[0.15em] text-white/70 drop-shadow block truncate">
                     {account.accountNumberMasked || "•••• ••••"}

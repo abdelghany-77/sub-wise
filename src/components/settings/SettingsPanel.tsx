@@ -15,7 +15,10 @@ import {
   Sparkles,
   Check,
   Coins,
+  Bell,
+  Smartphone,
 } from "lucide-react";
+import { NotificationService } from "../../lib/NotificationService";
 import { useStore, type AppSettings } from "../../store/useStore";
 import { useToastStore } from "../../store/useToastStore";
 import { Card } from "../ui/Card";
@@ -243,6 +246,11 @@ export function SettingsPanel() {
 
   const privacyLabelId = useId();
   const [activeTab, setActiveTab] = useState<TabId>("general");
+  const [permStatus, setPermStatus] = useState<"granted" | "denied" | "prompt">("prompt");
+
+  useEffect(() => {
+    NotificationService.checkPermissions().then(setPermStatus);
+  }, []);
 
   const monthStartsOnDay = settings.monthStartsOnDay ?? 1;
   const currency = "EGP";
@@ -590,6 +598,110 @@ export function SettingsPanel() {
                       </span>
                     </span>
                   </div>
+                </div>
+              </Card>
+
+              {/* Bill Reminders & Push Notifications */}
+              <Card padding="sm" className="space-y-3.5 lg:col-span-2">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <SectionHeader
+                    icon={Bell}
+                    tint="emerald"
+                    title="Bill Reminders & Local Notifications"
+                    description="Receive timely alerts 1 day prior to upcoming bill & subscription due dates"
+                  />
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border",
+                      permStatus === "granted"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        : permStatus === "denied"
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                          : "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        permStatus === "granted"
+                          ? "bg-emerald-400"
+                          : permStatus === "denied"
+                            ? "bg-rose-400"
+                            : "bg-amber-400",
+                      )}
+                    />
+                    {permStatus === "granted"
+                      ? "Notifications: Allowed"
+                      : permStatus === "denied"
+                        ? "Notifications: Blocked"
+                        : "Notifications: Permission Needed"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="min-w-0">
+                    <p id="notif-toggle-label" className="text-sm font-semibold text-white">
+                      1-Day-Prior Bill Due Alerts
+                    </p>
+                    <p className="text-xs text-white/45 leading-snug mt-0.5">
+                      Automatically schedules a reminder at 10:00 AM local time, exactly 1 day before any active bill or subscription is due.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.notificationsEnabled ?? true}
+                    onChange={async () => {
+                      const nextVal = !(settings.notificationsEnabled ?? true);
+                      if (nextVal) {
+                        const granted = await NotificationService.requestPermissions();
+                        setPermStatus(granted ? "granted" : "denied");
+                      }
+                      updateSettings({ notificationsEnabled: nextVal });
+                      await NotificationService.syncAllBillReminders(recurring, nextVal);
+                      addToast({
+                        type: nextVal ? "success" : "info",
+                        message: nextVal
+                          ? "Bill reminders enabled & synced."
+                          : "Bill reminders disabled.",
+                      });
+                    }}
+                    labelledBy="notif-toggle-label"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-500/[0.05] border border-emerald-500/20">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                      <Smartphone size={18} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">Test Notification System</p>
+                      <p className="text-xs text-white/45">Verify alert sound, vibration, and banner on this device</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      const success = await NotificationService.sendTestNotification();
+                      if (success) {
+                        setPermStatus("granted");
+                        addToast({
+                          type: "success",
+                          message: "Test notification sent! Check your notification tray 🔔",
+                        });
+                      } else {
+                        addToast({
+                          type: "warning",
+                          message: "Notification permission denied or blocked in system settings.",
+                        });
+                      }
+                    }}
+                    className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 w-full sm:w-auto whitespace-nowrap"
+                  >
+                    <Bell size={14} className="mr-1.5" />
+                    تجربة الإشعارات (Test)
+                  </Button>
                 </div>
               </Card>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { registerBackHandler } from "../../lib/backButtonManager";
 import {
   Search,
   LayoutDashboard,
@@ -76,6 +77,16 @@ export function CommandPalette({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Android hardware back button handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const unregister = registerBackHandler(() => {
+      onClose();
+      return true;
+    });
+    return unregister;
   }, [isOpen, onClose]);
 
   // Quick navigation items

@@ -6,6 +6,11 @@ import { ToastContainer } from "./components/ui/Toast";
 import { OfflineBanner } from "./components/ui/OfflineBanner";
 import { AddTransactionModal } from "./components/transactions/AddTransactionModal";
 import { useStore } from "./store/useStore";
+import { initCapacitorApp } from "./lib/capacitorInit";
+import { NotificationService } from "./lib/NotificationService";
+import { registerBackHandler } from "./lib/backButtonManager";
+import { App as CapApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import "./index.css";
 
 const VALID_PAGES: Page[] = [
@@ -47,10 +52,42 @@ function AppContent() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  // Process recurring transactions on app load
+  // Process recurring transactions & sync notifications on app load
+  const recurring = useStore((s) => s.recurring);
+  const notificationsEnabled = useStore((s) => s.settings.notificationsEnabled !== false);
+
   useEffect(() => {
+    initCapacitorApp();
     processRecurring();
+    NotificationService.syncAllBillReminders(recurring, notificationsEnabled).catch(() => {});
+  }, [processRecurring, recurring, notificationsEnabled]);
+
+  // Re-sync on app resume (foreground)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) {
+        processRecurring();
+        NotificationService.syncAllBillReminders(
+          useStore.getState().recurring,
+          useStore.getState().settings.notificationsEnabled !== false
+        ).catch(() => {});
+      }
+    });
+    return () => {
+      sub.then((h) => h.remove());
+    };
   }, [processRecurring]);
+
+  // Back button handler for Quick Add modal
+  useEffect(() => {
+    if (!showQuickAdd) return;
+    const unregister = registerBackHandler(() => {
+      setShowQuickAdd(false);
+      return true;
+    });
+    return unregister;
+  }, [showQuickAdd]);
 
   // Global 'N' keyboard shortcut for Quick-Add Transaction
   useEffect(() => {

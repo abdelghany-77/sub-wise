@@ -3,8 +3,11 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
+const isCapacitor = process.env.CAPACITOR === "true" || process.env.npm_lifecycle_event?.includes("cap");
+const base = isCapacitor ? "./" : (process.env.VITE_BASE || "/sub-wise/");
+
 export default defineConfig({
-  base: "/sub-wise/",
+  base,
   plugins: [
     react(),
     VitePWA({
