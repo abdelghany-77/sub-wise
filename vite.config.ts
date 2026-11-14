@@ -2,9 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-// https://vite.dev/config/
-const isCapacitor = process.env.CAPACITOR === "true" || process.env.npm_lifecycle_event?.includes("cap");
-const base = isCapacitor ? "./" : (process.env.VITE_BASE || "/sub-wise/");
+// Use relative base so assets load seamlessly in Capacitor (https://localhost/) and web subpaths
+const base = "./";
 
 export default defineConfig({
   base,
@@ -21,8 +20,8 @@ export default defineConfig({
         background_color: "#0B0F17",
         display: "standalone",
         orientation: "portrait",
-        scope: "/sub-wise/",
-        start_url: "/sub-wise/",
+        scope: "./",
+        start_url: "./",
         icons: [
           {
             src: "icon-192x192.png",

@@ -4,8 +4,12 @@ const config: CapacitorConfig = {
   appId: "com.abdelghany.subwise",
   appName: "SubWise",
   webDir: "dist",
+  android: {
+    backgroundColor: "#0B0F17",
+  },
   server: {
     androidScheme: "https",
+    hostname: "localhost",
   },
   plugins: {
     LocalNotifications: {
