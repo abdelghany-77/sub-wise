@@ -1,5 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
+import { Capacitor } from "@capacitor/core";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -268,15 +271,52 @@ export async function hashPin(pin: string): Promise<string> {
 
 /**
  * Exports text content cleanly on both desktop browsers and mobile/Capacitor WebViews.
- * Prefers Web Share API with file attachment on touch devices when available, falling back to anchor download.
+ * - On Native Android/iOS: writes the file to the native cache directory and triggers the native OS Share/Save sheet
+ *   so the user can save to device Downloads/Files, Drive, WhatsApp, email, or any file manager.
+ * - On Mobile Web: leverages the Web Share API with file attachments where available.
+ * - On Desktop Web: downloads the file via dynamic anchor tag.
  */
 export async function shareOrDownloadFile(
   content: string,
   filename: string,
   mimeType: string,
 ): Promise<"shared" | "downloaded"> {
-  const blob = new Blob([content], { type: mimeType });
+  // 1. Native Mobile (Capacitor Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const written = await Filesystem.writeFile({
+        path: filename,
+        data: content,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+      });
 
+      await Share.share({
+        title: filename,
+        text: `SubWise backup: ${filename}`,
+        url: written.uri,
+        dialogTitle: "Save or Share Backup",
+      });
+
+      return "shared";
+    } catch (err) {
+      console.warn("[shareOrDownloadFile] Native share failed, trying Documents write fallback:", err);
+      try {
+        await Filesystem.writeFile({
+          path: filename,
+          data: content,
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8,
+        });
+        return "downloaded";
+      } catch (writeErr) {
+        console.error("[shareOrDownloadFile] Filesystem write fallback failed:", writeErr);
+      }
+    }
+  }
+
+  // 2. Web Mobile with Web Share API (Safari iOS, Chrome Android on web)
+  const blob = new Blob([content], { type: mimeType });
   const isMobile =
     typeof navigator !== "undefined" &&
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -292,13 +332,13 @@ export async function shareOrDownloadFile(
         return "shared";
       }
     } catch (err) {
-      // If user dismissed share sheet, do not force download; otherwise fall back
       if (err instanceof DOMException && err.name === "AbortError") {
         return "shared";
       }
     }
   }
 
+  // 3. Desktop / Browser download via anchor tag
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

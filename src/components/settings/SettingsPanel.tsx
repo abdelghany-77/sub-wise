@@ -356,14 +356,14 @@ export function SettingsPanel() {
 
   const handleExport = async () => {
     const json = buildBackupJson();
-    const filename = `walleteer-backup-${todayISO()}.json`;
+    const filename = `subwise-backup-${todayISO()}.json`;
     const result = await shareOrDownloadFile(json, filename, "application/json");
     recordBackup();
     addToast({
       type: "success",
       message:
         result === "shared"
-          ? "Backup shared successfully."
+          ? "Backup ready — saved or shared successfully."
           : "Backup downloaded.",
     });
   };

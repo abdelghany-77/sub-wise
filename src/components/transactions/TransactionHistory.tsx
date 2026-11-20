@@ -282,7 +282,7 @@ export function TransactionHistory() {
       ].join(",");
     });
     const csvContent = [headers.join(","), ...rows].join("\n");
-    const filename = `walleteer_transactions_${todayISO()}.csv`;
+    const filename = `subwise_transactions_${todayISO()}.csv`;
     const result = await shareOrDownloadFile(
       csvContent,
       filename,
