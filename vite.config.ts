@@ -43,6 +43,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         navigateFallback: "index.html",
@@ -52,4 +53,15 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "zustand"],
+          "charts-vendor": ["recharts"],
+          "icons-vendor": ["lucide-react"],
+        },
+      },
+    },
+  },
 });

@@ -17,7 +17,15 @@ import {
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { useToastStore } from "../../store/useToastStore";
-import { cn, formatCurrency, formatDayLabel } from "../../lib/utils";
+import {
+  amountInBase,
+  cn,
+  formatCurrency,
+  formatDayLabel,
+  getAccountBalanceCurrency,
+  shareOrDownloadFile,
+  todayISO,
+} from "../../lib/utils";
 import type { Transaction } from "../../types";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "../../types";
 import { TransactionDetailModal } from "./TransactionDetailModal";
@@ -26,13 +34,6 @@ import {
   getCategoryColor,
   getCategoryIcon,
 } from "./transactionMeta";
-
-const ALL_CATEGORIES = [
-  "All",
-  ...EXPENSE_CATEGORIES,
-  ...INCOME_CATEGORIES,
-  "Transfer",
-];
 
 type SortField = "date" | "amount" | "category";
 type SortDir = "asc" | "desc";
@@ -49,9 +50,31 @@ const toISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function TransactionHistory() {
-  const { transactions, accounts, getAccountById, recordBackup, privacyMode } =
-    useStore();
+  const {
+    transactions,
+    accounts,
+    customCategories,
+    exchangeRates,
+    getAccountById,
+    recordBackup,
+    privacyMode,
+  } = useStore();
   const { addToast } = useToastStore();
+
+  const allCategoryOptions = useMemo(
+    () => [
+      "All",
+      ...Array.from(
+        new Set([
+          ...EXPENSE_CATEGORIES,
+          ...INCOME_CATEGORIES,
+          ...customCategories.map((c) => c.name),
+        ]),
+      ),
+      "Transfer",
+    ],
+    [customCategories],
+  );
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
@@ -121,16 +144,22 @@ export function TransactionHistory() {
     getAccountById,
   ]);
 
-  // Summary of the filtered set (transfers are neutral to net worth)
+  // Summary of the filtered set in base EGP (excludes neutral transfers, IOUs, and reconciliations)
   const summary = useMemo(() => {
     let income = 0;
     let expense = 0;
     for (const tx of filtered) {
-      if (tx.type === "income") income += tx.amount;
-      else if (tx.type === "expense") expense += tx.amount;
+      if (tx.isIou || tx.isReconciliation) continue;
+      const baseAmt = amountInBase(
+        tx.amount,
+        getAccountById(tx.accountId),
+        exchangeRates,
+      );
+      if (tx.type === "income") income += baseAmt;
+      else if (tx.type === "expense") expense += baseAmt;
     }
     return { income, expense, net: income - expense };
-  }, [filtered]);
+  }, [filtered, getAccountById, exchangeRates]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -154,17 +183,21 @@ export function TransactionHistory() {
       key: date,
       label: formatDayLabel(date),
       items,
-      net: items.reduce(
-        (s, t) =>
-          t.type === "income"
-            ? s + t.amount
-            : t.type === "expense"
-              ? s - t.amount
-              : s,
-        0,
-      ),
+      net: items.reduce((s, t) => {
+        if (t.isIou || t.isReconciliation) return s;
+        const baseAmt = amountInBase(
+          t.amount,
+          getAccountById(t.accountId),
+          exchangeRates,
+        );
+        return t.type === "income"
+          ? s + baseAmt
+          : t.type === "expense"
+            ? s - baseAmt
+            : s;
+      }, 0),
     }));
-  }, [paginated, sortField]);
+  }, [paginated, sortField, getAccountById, exchangeRates]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -213,7 +246,7 @@ export function TransactionHistory() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     if (filtered.length === 0) {
       addToast({ type: "warning", message: "No transactions to export" });
       return;
@@ -227,6 +260,7 @@ export function TransactionHistory() {
       "Category",
       "Account",
       "ToAccount",
+      "ToAmount",
       "Note",
       "IsRecurring",
     ];
@@ -238,26 +272,29 @@ export function TransactionHistory() {
         `"${tx.date}"`,
         `"${tx.type}"`,
         tx.amount,
-        `"${fromAcc?.currency || "EGP"}"`,
+        `"${getAccountBalanceCurrency(fromAcc)}"`,
         `"${tx.category || ""}"`,
         `"${fromAcc?.name || ""}"`,
         `"${toAcc?.name || ""}"`,
+        tx.toAmount ?? "",
         `"${(tx.note || "").replace(/"/g, '""')}"`,
         `"${tx.isRecurring ? "yes" : "no"}"`,
       ].join(",");
     });
     const csvContent = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `walleteer_transactions_${new Date().toISOString().split("T")[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const filename = `walleteer_transactions_${todayISO()}.csv`;
+    const result = await shareOrDownloadFile(
+      csvContent,
+      filename,
+      "text/csv;charset=utf-8;",
+    );
     recordBackup();
     addToast({
       type: "success",
-      message: `Exported ${filtered.length} transactions to CSV`,
+      message:
+        result === "shared"
+          ? `Shared ${filtered.length} transactions as CSV`
+          : `Exported ${filtered.length} transactions to CSV`,
     });
   };
 
@@ -266,7 +303,7 @@ export function TransactionHistory() {
   const endResult = Math.min(safeCurrentPage * pageSize, filtered.length);
 
   const pagerBtn =
-    "flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.09] transition-all disabled:opacity-20 disabled:pointer-events-none";
+    "flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.09] transition-all disabled:opacity-20 disabled:pointer-events-none";
 
   return (
     <div className="space-y-3.5">
@@ -433,7 +470,7 @@ export function TransactionHistory() {
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
               >
-                {ALL_CATEGORIES.map((c) => (
+                {allCategoryOptions.map((c) => (
                   <option key={c} value={c}>
                     {c === "All" ? "All categories" : c}
                   </option>
@@ -581,8 +618,14 @@ export function TransactionHistory() {
                     ? getAccountById(tx.toAccountId)
                     : undefined;
                   const meta = TX_TYPE_META[tx.type];
-                  const catColor = getCategoryColor(tx);
+                  const catColor = getCategoryColor(tx, customCategories);
                   const Icon = getCategoryIcon(tx.category, tx.type);
+                  const fromCur = getAccountBalanceCurrency(fromAcc);
+                  const toCur = getAccountBalanceCurrency(toAcc);
+                  const hasCrossCredit =
+                    tx.type === "transfer" &&
+                    tx.toAmount !== undefined &&
+                    (tx.toAmount !== tx.amount || fromCur !== toCur);
 
                   return (
                     <li key={tx.id}>
@@ -637,19 +680,28 @@ export function TransactionHistory() {
                           </p>
                         </div>
 
-                        <p
-                          className={cn(
-                            "text-sm font-bold font-mono tabular-nums whitespace-nowrap",
-                            meta.text,
-                            privacyMode && "privacy-blur",
+                        <div className="text-right flex-shrink-0">
+                          <p
+                            className={cn(
+                              "text-xs sm:text-sm font-bold font-mono tabular-nums whitespace-nowrap",
+                              meta.text,
+                              privacyMode && "privacy-blur",
+                            )}
+                          >
+                            {meta.sign}
+                            {formatCurrency(tx.amount, fromCur)}
+                          </p>
+                          {hasCrossCredit && tx.toAmount !== undefined && (
+                            <p
+                              className={cn(
+                                "text-[10px] font-mono text-sky-300/80 whitespace-nowrap",
+                                privacyMode && "privacy-blur",
+                              )}
+                            >
+                              → {formatCurrency(tx.toAmount, toCur)}
+                            </p>
                           )}
-                        >
-                          {meta.sign}
-                          {formatCurrency(
-                            tx.amount,
-                            fromAcc?.currency || "EGP",
-                          )}
-                        </p>
+                        </div>
                         <ChevronRight
                           size={14}
                           className="text-white/15 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all flex-shrink-0 hidden sm:block"

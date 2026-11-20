@@ -8,6 +8,7 @@ import {
   Check,
   Calendar,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Modal } from "../ui/Modal";
@@ -19,11 +20,18 @@ import {
   INCOME_CATEGORIES,
   CATEGORY_COLORS,
 } from "../../types";
-import { todayISO, cn } from "../../lib/utils";
+import {
+  todayISO,
+  cn,
+  getAccountBalanceCurrency,
+  getCurrencySymbol,
+  convertTransferAmount,
+} from "../../lib/utils";
 
 interface FormData {
   type: TransactionType;
   amount: string;
+  toAmount: string;
   category: string;
   note: string;
   date: string;
@@ -37,6 +45,7 @@ interface FormData {
 const DEFAULT_FORM: FormData = {
   type: "expense",
   amount: "",
+  toAmount: "",
   category: "",
   note: "",
   date: todayISO(),
@@ -60,8 +69,17 @@ export function AddTransactionModal({
   onClose,
   autoOpen = false,
 }: Props) {
-  const { accounts, transactions, addTransaction, updateTransaction } = useStore();
+  const {
+    accounts,
+    transactions,
+    customCategories,
+    exchangeRates,
+    privacyMode,
+    addTransaction,
+    updateTransaction,
+  } = useStore();
   const [isOpen, setIsOpen] = useState(autoOpen);
+  const [toAmountEdited, setToAmountEdited] = useState(false);
   const [form, setForm] = useState<FormData>({
     ...DEFAULT_FORM,
     type: initialType,
@@ -71,6 +89,19 @@ export function AddTransactionModal({
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!editTransaction;
+
+  const customCatsForType = useMemo(
+    () =>
+      form.type === "transfer"
+        ? []
+        : customCategories.filter((c) => c.type === form.type),
+    [customCategories, form.type],
+  );
+
+  const allCategories = useMemo(() => {
+    const base = form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    return Array.from(new Set([...base, ...customCatsForType.map((c) => c.name)]));
+  }, [form.type, customCatsForType]);
 
   // Compute Top 5 most-used categories dynamically
   const topCategories = useMemo(() => {
@@ -84,18 +115,21 @@ export function AddTransactionModal({
       .sort((a, b) => b[1] - a[1])
       .map(([cat]) => cat);
 
-    const fallbacks = form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-    const combined = Array.from(new Set([...sorted, ...fallbacks]));
-    return combined.slice(0, 5);
-  }, [transactions, form.type]);
-
-  const allCategories = form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    const combined = Array.from(
+      new Set([...sorted, ...customCatsForType.map((c) => c.name), ...allCategories]),
+    );
+    return combined.slice(0, 6);
+  }, [transactions, form.type, customCatsForType, allCategories]);
 
   useEffect(() => {
     if (editTransaction) {
       setForm({
         type: editTransaction.type,
         amount: String(editTransaction.amount),
+        toAmount:
+          editTransaction.toAmount !== undefined
+            ? String(editTransaction.toAmount)
+            : "",
         category: editTransaction.category,
         note: editTransaction.note,
         date: editTransaction.date,
@@ -105,6 +139,7 @@ export function AddTransactionModal({
         recurrenceFrequency: editTransaction.recurrenceFrequency ?? "monthly",
         recurrenceEndDate: editTransaction.recurrenceEndDate ?? "",
       });
+      setToAmountEdited(editTransaction.toAmount !== undefined);
       setErrors({});
       setIsOpen(true);
     }
@@ -112,10 +147,10 @@ export function AddTransactionModal({
 
   // Set default category on type change if none selected
   useEffect(() => {
-    if (!form.category && topCategories.length > 0) {
+    if (form.type !== "transfer" && !form.category && topCategories.length > 0) {
       setForm((prev) => ({ ...prev, category: topCategories[0] }));
     }
-  }, [topCategories, form.category]);
+  }, [topCategories, form.category, form.type]);
 
   // Focus amount input when opened
   useEffect(() => {
@@ -126,6 +161,61 @@ export function AddTransactionModal({
       }, 100);
     }
   }, [isOpen]);
+
+  const selectedAccount = accounts.find((a) => a.id === form.accountId);
+  const destinationAccount = accounts.find((a) => a.id === form.toAccountId);
+  const displayCurrency = getAccountBalanceCurrency(selectedAccount);
+  const destCurrency = getAccountBalanceCurrency(destinationAccount);
+  const isCrossCurrencyTransfer =
+    form.type === "transfer" &&
+    !!selectedAccount &&
+    !!destinationAccount &&
+    displayCurrency !== destCurrency;
+
+  // Auto-calculate destination amount for cross-currency transfers unless user customized it
+  useEffect(() => {
+    if (!isCrossCurrencyTransfer || toAmountEdited) return;
+    const amt = Number(form.amount);
+    if (!form.amount || isNaN(amt) || amt <= 0) {
+      setForm((prev) => (prev.toAmount ? { ...prev, toAmount: "" } : prev));
+      return;
+    }
+    const converted = convertTransferAmount(
+      amt,
+      selectedAccount,
+      destinationAccount,
+      exchangeRates,
+    );
+    setForm((prev) => ({ ...prev, toAmount: String(converted) }));
+  }, [
+    isCrossCurrencyTransfer,
+    toAmountEdited,
+    form.amount,
+    selectedAccount,
+    destinationAccount,
+    exchangeRates,
+  ]);
+
+  // Compute available balance for warnings / validation
+  const availableBalance = useMemo(() => {
+    if (!selectedAccount) return null;
+    let available = selectedAccount.balance;
+    if (
+      isEditMode &&
+      editTransaction &&
+      editTransaction.accountId === form.accountId &&
+      (editTransaction.type === "expense" || editTransaction.type === "transfer")
+    ) {
+      available += editTransaction.amount;
+    }
+    return available;
+  }, [selectedAccount, isEditMode, editTransaction, form.accountId]);
+
+  const isCreditCardOverBalance =
+    (form.type === "expense" || form.type === "transfer") &&
+    selectedAccount?.type === "card" &&
+    availableBalance !== null &&
+    Number(form.amount) > availableBalance;
 
   const validate = () => {
     const e: Partial<Record<string, string>> = {};
@@ -138,26 +228,24 @@ export function AddTransactionModal({
       e.toAccountId = "Select destination account";
     if (form.type === "transfer" && form.accountId === form.toAccountId)
       e.toAccountId = "Source and destination must differ";
+    if (
+      isCrossCurrencyTransfer &&
+      (!form.toAmount || isNaN(Number(form.toAmount)) || Number(form.toAmount) <= 0)
+    ) {
+      e.toAmount = "Enter a valid destination amount";
+    }
 
     if (
       (form.type === "expense" || form.type === "transfer") &&
-      form.accountId &&
+      selectedAccount &&
+      selectedAccount.type !== "card" &&
+      availableBalance !== null &&
       form.amount &&
       !isNaN(Number(form.amount)) &&
-      Number(form.amount) > 0
+      Number(form.amount) > 0 &&
+      Number(form.amount) > availableBalance
     ) {
-      const sourceAccount = accounts.find((a) => a.id === form.accountId);
-      if (sourceAccount) {
-        let available = sourceAccount.balance;
-        if (isEditMode && editTransaction && editTransaction.accountId === form.accountId) {
-          if (editTransaction.type === "expense" || editTransaction.type === "transfer") {
-            available += editTransaction.amount;
-          }
-        }
-        if (Number(form.amount) > available) {
-          e.amount = `Insufficient funds (${sourceAccount.currency} ${available.toFixed(2)} available)`;
-        }
-      }
+      e.amount = `Insufficient funds (${displayCurrency} ${availableBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available)`;
     }
 
     return e;
@@ -167,9 +255,11 @@ export function AddTransactionModal({
     setForm({
       ...DEFAULT_FORM,
       type: initialType,
+      date: todayISO(),
       accountId: accounts[0]?.id ?? "",
       category: (initialType === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)[0],
     });
+    setToAmountEdited(false);
     setErrors({});
     setIsOpen(true);
   };
@@ -190,6 +280,10 @@ export function AddTransactionModal({
     const txData = {
       type: form.type,
       amount: Number(form.amount),
+      toAmount:
+        isCrossCurrencyTransfer && Number(form.toAmount) > 0
+          ? Number(form.toAmount)
+          : undefined,
       category: form.type === "transfer" ? "Transfer" : form.category,
       note: form.note,
       date: form.date,
@@ -209,11 +303,14 @@ export function AddTransactionModal({
     handleClose();
   };
 
-  const selectedAccount = accounts.find((a) => a.id === form.accountId);
+  const getCategorySwatch = (cat: string) => {
+    const custom = customCategories.find((c) => c.name === cat);
+    return custom?.color ?? CATEGORY_COLORS[cat] ?? "#3b82f6";
+  };
 
   return (
     <>
-      {!isEditMode && (
+      {!isEditMode && !autoOpen && (
         <Button icon={<Plus size={16} />} onClick={open}>
           <span className="hidden xs:inline">Add Transaction</span>
           <span className="xs:hidden">Add</span>
@@ -228,7 +325,7 @@ export function AddTransactionModal({
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 1. Transaction Type Switcher */}
-          <div className="grid grid-cols-3 gap-2 bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08]">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08]">
             <button
               type="button"
               onClick={() =>
@@ -239,7 +336,7 @@ export function AddTransactionModal({
                 })
               }
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "flex items-center justify-center gap-1.5 py-2.5 min-h-[42px] rounded-xl text-xs font-bold transition-all",
                 form.type === "expense"
                   ? "bg-rose-600 text-white shadow-lg shadow-rose-900/40"
                   : "text-white/50 hover:text-white",
@@ -259,7 +356,7 @@ export function AddTransactionModal({
                 })
               }
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "flex items-center justify-center gap-1.5 py-2.5 min-h-[42px] rounded-xl text-xs font-bold transition-all",
                 form.type === "income"
                   ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/40"
                   : "text-white/50 hover:text-white",
@@ -271,15 +368,16 @@ export function AddTransactionModal({
 
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                setToAmountEdited(false);
                 setForm({
                   ...form,
                   type: "transfer",
                   category: "Transfer",
-                })
-              }
+                });
+              }}
               className={cn(
-                "flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "flex items-center justify-center gap-1.5 py-2.5 min-h-[42px] rounded-xl text-xs font-bold transition-all",
                 form.type === "transfer"
                   ? "bg-sky-600 text-white shadow-lg shadow-sky-900/40"
                   : "text-white/50 hover:text-white",
@@ -290,15 +388,15 @@ export function AddTransactionModal({
             </button>
           </div>
 
-          {/* 2. Massive Centered Amount Input (Native Keypad Screen Feel) */}
-          <div className="bg-gradient-to-b from-white/[0.03] to-white/[0.01] rounded-3xl p-5 border border-white/[0.08] text-center relative overflow-hidden">
+          {/* 2. Massive Centered Amount Input */}
+          <div className="bg-gradient-to-b from-white/[0.03] to-white/[0.01] rounded-3xl p-4 sm:p-5 border border-white/[0.08] text-center relative overflow-hidden">
             <div className="text-[10px] uppercase font-bold tracking-widest text-white/40 mb-1">
-              Amount ({selectedAccount?.currency || "EGP"})
+              Amount ({displayCurrency})
             </div>
 
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-2xl sm:text-3xl font-extrabold text-white/40">
-                {selectedAccount?.currency === "USD" ? "$" : selectedAccount?.currency === "EUR" ? "€" : "EGP"}
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="text-xl sm:text-3xl font-extrabold text-white/40">
+                {getCurrencySymbol(displayCurrency)}
               </span>
               <input
                 ref={amountInputRef}
@@ -312,7 +410,7 @@ export function AddTransactionModal({
                   if (errors.amount) setErrors({ ...errors, amount: undefined });
                 }}
                 className={cn(
-                  "text-4xl sm:text-5xl font-black font-mono tracking-tight tabular-nums bg-transparent text-white text-center focus:outline-none w-full max-w-[260px] placeholder-white/20",
+                  "text-3xl sm:text-5xl font-black font-mono tracking-tight tabular-nums bg-transparent text-white text-center focus:outline-none w-full max-w-[240px] placeholder-white/20",
                   form.type === "income"
                     ? "text-emerald-400"
                     : form.type === "expense"
@@ -323,8 +421,14 @@ export function AddTransactionModal({
             </div>
 
             {errors.amount && (
-              <p className="text-xs text-rose-400 font-medium mt-1 animate-pulse">
+              <p className="text-xs text-rose-400 font-medium mt-1.5">
                 {errors.amount}
+              </p>
+            )}
+            {!errors.amount && isCreditCardOverBalance && (
+              <p className="text-[11px] text-amber-300 font-medium mt-1.5 inline-flex items-center gap-1">
+                <AlertTriangle size={12} />
+                Exceeds current credit card balance — balance will go negative.
               </p>
             )}
           </div>
@@ -336,8 +440,16 @@ export function AddTransactionModal({
                 {form.type === "transfer" ? "From Account" : "Account"}
               </span>
               {selectedAccount && (
-                <span className="text-[11px] text-white/40 font-mono">
-                  Avail: {selectedAccount.currency} {selectedAccount.balance.toLocaleString()}
+                <span
+                  className={cn(
+                    "text-[11px] text-white/40 font-mono tabular-nums",
+                    privacyMode && "privacy-blur",
+                  )}
+                >
+                  Avail: {displayCurrency}{" "}
+                  {selectedAccount.balance.toLocaleString("en-US", {
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               )}
             </div>
@@ -349,9 +461,12 @@ export function AddTransactionModal({
                   <button
                     key={acc.id}
                     type="button"
-                    onClick={() => setForm({ ...form, accountId: acc.id })}
+                    onClick={() => {
+                      setToAmountEdited(false);
+                      setForm({ ...form, accountId: acc.id });
+                    }}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
+                      "px-3 py-2 min-h-[38px] rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
                       isSelected
                         ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-900/40"
                         : "bg-white/[0.04] text-white/60 hover:text-white border-white/[0.08]",
@@ -374,47 +489,91 @@ export function AddTransactionModal({
 
           {/* Destination Account for Transfers */}
           {form.type === "transfer" && (
-            <div>
-              <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1.5">
-                To Destination Account
-              </span>
-              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
-                {accounts
-                  .filter((a) => a.id !== form.accountId)
-                  .map((acc) => {
-                    const isSelected = form.toAccountId === acc.id;
-                    return (
-                      <button
-                        key={acc.id}
-                        type="button"
-                        onClick={() => setForm({ ...form, toAccountId: acc.id })}
-                        className={cn(
-                          "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
-                          isSelected
-                            ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-900/40"
-                            : "bg-white/[0.04] text-white/60 hover:text-white border-white/[0.08]",
-                        )}
-                      >
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: acc.color }}
-                        />
-                        <span>{acc.name}</span>
-                        {isSelected && <Check size={12} strokeWidth={3} />}
-                      </button>
-                    );
-                  })}
+            <div className="space-y-3">
+              <div>
+                <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1.5">
+                  To Destination Account
+                </span>
+                <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                  {accounts
+                    .filter((a) => a.id !== form.accountId)
+                    .map((acc) => {
+                      const isSelected = form.toAccountId === acc.id;
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => {
+                            setToAmountEdited(false);
+                            setForm({ ...form, toAccountId: acc.id });
+                          }}
+                          className={cn(
+                            "px-3 py-2 min-h-[38px] rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all flex-shrink-0 border",
+                            isSelected
+                              ? "bg-sky-600 text-white border-sky-400 shadow-md shadow-sky-900/40"
+                              : "bg-white/[0.04] text-white/60 hover:text-white border-white/[0.08]",
+                          )}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: acc.color }}
+                          />
+                          <span>{acc.name}</span>
+                          {isSelected && <Check size={12} strokeWidth={3} />}
+                        </button>
+                      );
+                    })}
+                </div>
+                {errors.toAccountId && (
+                  <p className="text-xs text-rose-400 mt-1">{errors.toAccountId}</p>
+                )}
               </div>
-              {errors.toAccountId && (
-                <p className="text-xs text-rose-400 mt-1">{errors.toAccountId}</p>
+
+              {isCrossCurrencyTransfer && (
+                <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/25 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="transfer-dest-amount"
+                      className="text-[11px] font-semibold text-sky-300 uppercase tracking-wider"
+                    >
+                      Destination Receives ({destCurrency})
+                    </label>
+                    <span className="text-[10px] text-white/45">
+                      {displayCurrency} → {destCurrency}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-sky-300 font-mono">
+                      {getCurrencySymbol(destCurrency)}
+                    </span>
+                    <input
+                      id="transfer-dest-amount"
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      value={form.toAmount}
+                      onChange={(e) => {
+                        setToAmountEdited(true);
+                        setForm({ ...form, toAmount: e.target.value });
+                        if (errors.toAmount)
+                          setErrors({ ...errors, toAmount: undefined });
+                      }}
+                      placeholder="0.00"
+                      className="input-base py-1.5 font-mono font-bold text-sm"
+                    />
+                  </div>
+                  {errors.toAmount && (
+                    <p className="text-xs text-rose-400">{errors.toAmount}</p>
+                  )}
+                </div>
               )}
             </div>
           )}
 
-          {/* 4. Top 5 Most-Used Category Pills (Under 3 seconds logging) */}
+          {/* 4. Top Most-Used Category Pills */}
           {form.type !== "transfer" && (
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 gap-2">
                 <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider flex items-center gap-1">
                   <Sparkles size={11} className="text-blue-400" />
                   <span>Top Categories</span>
@@ -422,7 +581,8 @@ export function AddTransactionModal({
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="bg-transparent text-[11px] text-blue-400 font-semibold focus:outline-none cursor-pointer"
+                  className="bg-transparent text-[11px] text-blue-400 font-semibold focus:outline-none cursor-pointer max-w-[160px] truncate"
+                  aria-label="All categories"
                 >
                   <option value="" disabled className="bg-[#111827]">
                     More Categories...
@@ -435,17 +595,17 @@ export function AddTransactionModal({
                 </select>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {topCategories.map((cat) => {
                   const isSelected = form.category === cat;
-                  const catColor = CATEGORY_COLORS[cat] || "#3b82f6";
+                  const catColor = getCategorySwatch(cat);
                   return (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setForm({ ...form, category: cat })}
                       className={cn(
-                        "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border",
+                        "px-3 py-1.5 min-h-[34px] rounded-xl text-xs font-semibold transition-all border",
                         isSelected
                           ? "bg-white text-black border-white shadow-md font-bold"
                           : "bg-white/[0.04] text-white/70 hover:text-white border-white/[0.08]",
@@ -471,8 +631,8 @@ export function AddTransactionModal({
               <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wider block mb-1">
                 Date
               </label>
-              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white">
-                <Calendar size={14} className="text-white/40" />
+              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white min-h-[40px]">
+                <Calendar size={14} className="text-white/40 flex-shrink-0" />
                 <input
                   type="date"
                   value={form.date}
@@ -491,7 +651,7 @@ export function AddTransactionModal({
                 placeholder="e.g. Lunch at Arkan, Uber ride"
                 value={form.note}
                 onChange={(e) => setForm({ ...form, note: e.target.value })}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full min-h-[40px] bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -502,10 +662,10 @@ export function AddTransactionModal({
               type="button"
               onClick={() => setForm({ ...form, isRecurring: !form.isRecurring })}
               className={cn(
-                "flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-xl transition-all border",
+                "flex items-center gap-2 text-xs font-medium px-3 py-2 min-h-[38px] rounded-xl transition-all border",
                 form.isRecurring
                   ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                  : "bg-white/[0.03] text-white/40 hover:text-white/70 border-white/[0.06]",
+                  : "bg-white/[0.03] text-white/45 hover:text-white/75 border-white/[0.06]",
               )}
             >
               <Repeat size={13} />
@@ -513,7 +673,7 @@ export function AddTransactionModal({
             </button>
 
             {form.isRecurring && (
-              <div className="grid grid-cols-2 gap-3 mt-2 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 mt-2 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <div>
                   <label className="label-base text-[10px]">Frequency</label>
                   <select
@@ -524,7 +684,7 @@ export function AddTransactionModal({
                         recurrenceFrequency: e.target.value as FormData["recurrenceFrequency"],
                       })
                     }
-                    className="input-base text-xs py-1.5"
+                    className="input-base text-xs py-2"
                   >
                     <option value="daily" className="bg-[#111827]">Daily</option>
                     <option value="weekly" className="bg-[#111827]">Weekly</option>
@@ -539,7 +699,7 @@ export function AddTransactionModal({
                     type="date"
                     value={form.recurrenceEndDate}
                     onChange={(e) => setForm({ ...form, recurrenceEndDate: e.target.value })}
-                    className="input-base text-xs py-1.5"
+                    className="input-base text-xs py-2"
                   />
                 </div>
               </div>
@@ -548,7 +708,7 @@ export function AddTransactionModal({
 
           {/* Submit Actions */}
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.08]">
-            <Button type="button" variant="ghost" onClick={handleClose} className="flex-1">
+            <Button type="button" variant="ghost" onClick={handleClose} className="flex-1 min-h-[44px]">
               Cancel
             </Button>
             <Button
@@ -560,7 +720,7 @@ export function AddTransactionModal({
                     ? "expense"
                     : "primary"
               }
-              className="flex-1 font-bold text-sm py-2.5 shadow-lg"
+              className="flex-1 font-bold text-sm py-2.5 min-h-[44px] shadow-lg"
             >
               {isEditMode ? "Update" : "Log"}{" "}
               {form.type === "expense" ? "Expense" : form.type === "income" ? "Income" : "Transfer"}

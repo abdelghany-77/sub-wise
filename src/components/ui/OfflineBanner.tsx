@@ -21,10 +21,10 @@ export function OfflineBanner() {
   return (
     <div
       role="status"
-      className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber-400/20 bg-[#1a1710]/95 px-4 py-2 text-xs text-amber-200 shadow-xl shadow-black/30 backdrop-blur-md"
+      className="fixed bottom-24 md:bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 max-w-[calc(100vw-2rem)] rounded-full border border-amber-400/20 bg-[#1a1710]/95 px-4 py-2 text-xs text-amber-200 shadow-xl shadow-black/30 backdrop-blur-md"
     >
-      <CloudOff size={14} aria-hidden="true" />
-      <span>Offline mode — changes are saved on this device</span>
+      <CloudOff size={14} aria-hidden="true" className="flex-shrink-0" />
+      <span className="truncate">Offline mode — changes are saved on this device</span>
     </div>
   );
 }

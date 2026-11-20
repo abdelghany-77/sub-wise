@@ -263,6 +263,8 @@ export interface Transaction {
   id: string;
   type: TransactionType;
   amount: number;
+  /** Optional credited amount in destination account currency for cross-currency transfers. */
+  toAmount?: number;
   category: string;
   note: string;
   date: string;
@@ -325,7 +327,8 @@ export type IouStatus = "pending" | "settled";
 export interface Iou {
   id: string;
   personName: string;
-  amount: number;
+  amount: number; // Remaining unsettled amount
+  originalAmount?: number; // Initial amount before partial settlements
   type: IouType; // "lent" = owed to user (ليا بره) | "borrowed" = user owes (عليا)
   accountId: string;
   dueDate?: string;
@@ -334,6 +337,34 @@ export interface Iou {
   settledDate?: string;
   createdAt: string;
 }
+
+export type InstallmentStatus = "active" | "completed";
+
+export interface Installment {
+  id: string;
+  name: string;
+  provider?: string; // e.g., ValU, CIB, NBE, Sympl
+  totalAmount: number;
+  monthlyAmount: number;
+  totalMonths: number;
+  paidMonths: number;
+  nextDueDate: string; // YYYY-MM-DD
+  accountId: string;
+  category: string;
+  status: InstallmentStatus;
+  anchorDay?: number;
+  note?: string;
+  createdAt: string;
+}
+
+export interface CustomCategory {
+  id: string;
+  name: string;
+  type: "expense" | "income";
+  color: string;
+}
+
+export type AppLanguage = "en" | "ar";
 
 export interface ExchangeRates {
   USD: number;

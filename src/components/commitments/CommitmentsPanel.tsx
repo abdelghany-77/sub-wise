@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { CalendarClock, Users2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarClock, Layers, Users2 } from "lucide-react";
 import { SubscriptionsPanel } from "../subscriptions/SubscriptionsPanel";
+import { InstallmentsPanel } from "../installments/InstallmentsPanel";
 import { IousPanel } from "../ious/IousPanel";
 import { useStore } from "../../store/useStore";
 import { cn } from "../../lib/utils";
+import { useT } from "../../lib/i18n";
 
-type Tab = "subscriptions" | "ious";
+type Tab = "subscriptions" | "installments" | "ious";
 
 interface Props {
   initialTab?: Tab;
@@ -14,10 +16,19 @@ interface Props {
 export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const recurring = useStore((s) => s.recurring);
+  const installments = useStore((s) => s.installments);
   const ious = useStore((s) => s.ious);
+  const { t } = useT();
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const activeBillsCount = recurring.filter(
     (r) => (r.status ?? "active") === "active",
+  ).length;
+  const activeInstallmentsCount = installments.filter(
+    (p) => p.status === "active",
   ).length;
   const pendingIousCount = ious.filter((i) => i.status === "pending").length;
 
@@ -32,8 +43,8 @@ export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
   }[] = [
     {
       id: "subscriptions",
-      shortLabel: "Bills",
-      longLabel: "Subscriptions & Bills",
+      shortLabel: t("nav.bills"),
+      longLabel: t("tab.bills"),
       icon: CalendarClock,
       count: activeBillsCount,
       activeClass:
@@ -41,9 +52,19 @@ export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
       idleBadge: "bg-white/[0.08] text-white/60",
     },
     {
+      id: "installments",
+      shortLabel: t("nav.installments"),
+      longLabel: t("tab.installments"),
+      icon: Layers,
+      count: activeInstallmentsCount,
+      activeClass:
+        "bg-gradient-to-r from-violet-600 to-purple-600 shadow-md shadow-violet-600/30 border-violet-400/25",
+      idleBadge: "bg-violet-500/20 text-violet-300",
+    },
+    {
       id: "ious",
-      shortLabel: "IOUs",
-      longLabel: "IOUs · Lent & Borrowed",
+      shortLabel: t("nav.ious"),
+      longLabel: t("tab.ious"),
       icon: Users2,
       count: pendingIousCount,
       activeClass:
@@ -56,8 +77,8 @@ export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
     <div className="space-y-3">
       <div
         role="tablist"
-        aria-label="Bills and IOUs"
-        className="grid grid-cols-2 sm:inline-grid sm:grid-cols-[auto_auto] p-1 gap-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-xl shadow-lg shadow-black/20 w-full sm:w-auto"
+        aria-label="Bills, Installments, and IOUs"
+        className="grid grid-cols-3 sm:inline-grid sm:grid-cols-[auto_auto_auto] p-1 gap-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-xl shadow-lg shadow-black/20 w-full sm:w-auto"
       >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -72,22 +93,22 @@ export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
               aria-controls="commitments-tabpanel"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center justify-center gap-2 px-3 sm:px-5 py-2 min-h-[40px] rounded-xl border text-sm font-semibold transition-all duration-200",
+                "flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 min-h-[42px] rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-200 min-w-0",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
                 isActive
                   ? cn("text-white", tab.activeClass)
                   : "border-transparent text-white/50 hover:text-white hover:bg-white/[0.04]",
               )}
             >
-              <Icon size={15} className="flex-shrink-0" aria-hidden="true" />
-              <span className="sm:hidden">{tab.shortLabel}</span>
+              <Icon size={14} className="flex-shrink-0 hidden xs:block" aria-hidden="true" />
+              <span className="sm:hidden truncate">{tab.shortLabel}</span>
               <span className="hidden sm:inline whitespace-nowrap">
                 {tab.longLabel}
               </span>
               {tab.count > 0 && (
                 <span
                   className={cn(
-                    "px-1.5 py-0.5 rounded-full text-[10px] leading-none font-mono font-bold",
+                    "px-1.5 py-0.5 rounded-full text-[10px] leading-none font-mono font-bold flex-shrink-0",
                     isActive ? "bg-black/30 text-white" : tab.idleBadge,
                   )}
                 >
@@ -106,7 +127,13 @@ export function CommitmentsPanel({ initialTab = "subscriptions" }: Props) {
         aria-labelledby={`commitments-tab-${activeTab}`}
         className="animate-fade-in"
       >
-        {activeTab === "subscriptions" ? <SubscriptionsPanel /> : <IousPanel />}
+        {activeTab === "subscriptions" ? (
+          <SubscriptionsPanel />
+        ) : activeTab === "installments" ? (
+          <InstallmentsPanel />
+        ) : (
+          <IousPanel />
+        )}
       </div>
     </div>
   );

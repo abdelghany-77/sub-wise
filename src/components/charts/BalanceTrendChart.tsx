@@ -10,7 +10,13 @@ import {
 } from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, cn } from "../../lib/utils";
+import {
+  formatCurrency,
+  accountBalanceInBase,
+  amountInBase,
+  todayISO,
+  cn,
+} from "../../lib/utils";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -23,7 +29,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return (
     <div className="bg-[#111827] border border-white/10 rounded-xl p-2.5 shadow-xl">
       <p className="text-white/50 text-[11px] mb-0.5">{label}</p>
-      <p className="text-white font-bold font-mono text-xs">
+      <p className="text-white font-bold font-mono text-xs tabular-nums">
         {formatCurrency(payload[0].value)}
       </p>
     </div>
@@ -31,62 +37,77 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function BalanceTrendChart() {
-  const { transactions, accounts, privacyMode } = useStore();
+  const { transactions, accounts, exchangeRates, privacyMode } = useStore();
 
   const chartData = useMemo(() => {
     if (transactions.length === 0) return [];
 
-    // Sort transactions by date ascending
-    const sorted = [...transactions].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
+
+    // Current total balance across ALL accounts expressed in base currency (EGP)
+    const currentTotalBase = accounts.reduce(
+      (sum, acc) => sum + accountBalanceInBase(acc, exchangeRates),
+      0,
     );
 
-    // Current total balance excluding savings
-    const currentBalance = accounts
-      .filter((a) => a.type !== "savings")
-      .reduce((s, a) => s + a.balance, 0);
-
-    const dateSet = new Set<string>();
-    sorted.forEach((tx) => dateSet.add(tx.date));
-
-    // Build a map of net change per day
+    // Aggregate net base-currency balance change per calendar day
+    // Transfers between own accounts do not change total portfolio balance (except minor FX spread)
     const dailyChange = new Map<string, number>();
-    for (const tx of sorted) {
-      const delta =
-        tx.type === "income"
-          ? tx.amount
-          : tx.type === "expense"
-            ? -tx.amount
-            : 0;
+    const dateSet = new Set<string>();
+
+    for (const tx of transactions) {
+      dateSet.add(tx.date);
+      let delta = 0;
+      if (tx.type === "income") {
+        delta = amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates);
+      } else if (tx.type === "expense") {
+        delta = -amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates);
+      } else if (tx.type === "transfer" && tx.toAccountId) {
+        const outBase = amountInBase(
+          tx.amount,
+          accMap.get(tx.accountId),
+          exchangeRates,
+        );
+        const inBase = amountInBase(
+          tx.toAmount ?? tx.amount,
+          accMap.get(tx.toAccountId),
+          exchangeRates,
+        );
+        delta = inBase - outBase;
+      }
       dailyChange.set(tx.date, (dailyChange.get(tx.date) ?? 0) + delta);
     }
 
-    const uniqueDates = Array.from(dateSet).sort();
+    const todayStr = todayISO();
+    const uniqueDates = Array.from(dateSet)
+      .filter((d) => d <= todayStr)
+      .sort();
+
     if (uniqueDates.length === 0) return [];
 
-    let running = currentBalance;
+    let running = currentTotalBase;
     const history: Array<{ date: string; balance: number }> = [];
 
-    // Add today's point
-    const todayStr = new Date().toISOString().split("T")[0];
-    history.unshift({
-      date: todayStr.slice(5),
-      balance: running,
-    });
-
-    // Walk backwards
-    for (let i = uniqueDates.length - 1; i >= 0; i--) {
-      const d = uniqueDates[i];
-      const change = dailyChange.get(d) ?? 0;
-      running -= change;
+    // Walk backwards from today's balance
+    const lastTxDate = uniqueDates[uniqueDates.length - 1];
+    if (lastTxDate !== todayStr) {
       history.unshift({
-        date: d.slice(5),
-        balance: Math.max(0, running),
+        date: todayStr.slice(5),
+        balance: Math.round(running),
       });
     }
 
-    return history.slice(-14); // show last 14 data points
-  }, [transactions, accounts]);
+    for (let i = uniqueDates.length - 1; i >= 0; i--) {
+      const d = uniqueDates[i];
+      history.unshift({
+        date: d.slice(5),
+        balance: Math.round(running),
+      });
+      running -= dailyChange.get(d) ?? 0;
+    }
+
+    return history.slice(-14);
+  }, [transactions, accounts, exchangeRates]);
 
   if (chartData.length < 2) {
     return (
@@ -94,11 +115,11 @@ export function BalanceTrendChart() {
         <div>
           <h3 className="text-sm font-semibold text-white">Balance Trend</h3>
           <p className="text-[11px] text-white/40">
-            Historical balance progression
+            Total portfolio progression (EGP)
           </p>
         </div>
-        <div className="flex-1 flex items-center justify-center text-white/30 text-xs">
-          Need at least 2 transactions to display trend
+        <div className="flex-1 flex items-center justify-center text-white/30 text-xs text-center">
+          Need at least 2 transaction days to display trend
         </div>
       </Card>
     );
@@ -109,7 +130,7 @@ export function BalanceTrendChart() {
       <div>
         <h3 className="text-sm font-semibold text-white">Balance Trend</h3>
         <p className="text-[11px] text-white/40">
-          Historical balance progression
+          Total portfolio progression (EGP)
         </p>
       </div>
 
@@ -151,7 +172,7 @@ export function BalanceTrendChart() {
                   ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`
                   : String(v)
               }
-              width={38}
+              width={40}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area

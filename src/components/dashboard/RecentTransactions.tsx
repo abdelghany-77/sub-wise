@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { ArrowRight, ReceiptText, Repeat } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, formatDayLabel, cn } from "../../lib/utils";
+import {
+  formatCurrency,
+  formatDayLabel,
+  getAccountBalanceCurrency,
+  cn,
+} from "../../lib/utils";
 import type { Transaction } from "../../types";
 import { TransactionDetailModal } from "../transactions/TransactionDetailModal";
 import {
@@ -22,7 +27,8 @@ export function RecentTransactions({
   limit = 5,
   className,
 }: RecentTransactionsProps) {
-  const { transactions, getAccountById, privacyMode } = useStore();
+  const { transactions, getAccountById, privacyMode, customCategories } =
+    useStore();
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const recent = useMemo(
@@ -51,7 +57,7 @@ export function RecentTransactions({
         </div>
         <button
           onClick={onViewAll}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors py-1 px-2.5 rounded-lg hover:bg-blue-500/10"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors min-h-[36px] px-2.5 rounded-lg hover:bg-blue-500/10"
         >
           <span>View all</span>
           <ArrowRight size={13} />
@@ -73,15 +79,16 @@ export function RecentTransactions({
               const toAcc = tx.toAccountId
                 ? getAccountById(tx.toAccountId)
                 : undefined;
+              const fromCur = getAccountBalanceCurrency(fromAcc);
               const meta = TX_TYPE_META[tx.type];
-              const catColor = getCategoryColor(tx);
+              const catColor = getCategoryColor(tx, customCategories);
               const Icon = getCategoryIcon(tx.category, tx.type);
 
               return (
                 <li key={tx.id}>
                   <button
                     onClick={() => setSelectedTx(tx)}
-                    className="w-full flex items-center gap-2.5 py-1.5 px-2 rounded-xl text-left hover:bg-white/[0.05] focus-visible:bg-white/[0.06] focus:outline-none transition-colors"
+                    className="w-full min-h-[48px] flex items-center gap-2.5 py-1.5 px-2 rounded-xl text-start hover:bg-white/[0.05] focus-visible:bg-white/[0.06] focus:outline-none transition-colors"
                     aria-label={`View details for ${tx.note || tx.category}`}
                   >
                     <div
@@ -124,7 +131,7 @@ export function RecentTransactions({
                       )}
                     >
                       {meta.sign}
-                      {formatCurrency(tx.amount, fromAcc?.currency || "EGP")}
+                      {formatCurrency(tx.amount, fromCur)}
                     </p>
                   </button>
                 </li>

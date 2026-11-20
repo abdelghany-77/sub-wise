@@ -75,7 +75,6 @@ class NotificationServiceManager {
           importance: 5, // Max importance for heads-up alert
           visibility: 1, // Public
           vibration: true,
-          sound: "beep.wav",
         });
       } catch (err) {
         console.warn("[NotificationService] createChannel error:", err);
@@ -141,7 +140,10 @@ class NotificationServiceManager {
   /**
    * Schedules a 1-day-prior reminder for a recurring bill or subscription.
    */
-  async scheduleBillReminder(bill: RecurringBill): Promise<boolean> {
+  async scheduleBillReminder(
+    bill: RecurringBill,
+    currency = "EGP",
+  ): Promise<boolean> {
     await this.init();
 
     const notifId = stringToNotificationId(bill.id);
@@ -149,7 +151,7 @@ class NotificationServiceManager {
     // Cancel any existing notification for this bill first
     await this.cancelBillReminder(bill.id);
 
-    // Skip paused or non-active bills
+    // Skip paused bills
     if (bill.status === "paused") {
       return false;
     }
@@ -160,7 +162,7 @@ class NotificationServiceManager {
     }
 
     const title = "تذكير بموعد فاتورة غداً 🔔";
-    const body = `غداً موعد استحقاق "${bill.name}" بقيمة ${bill.amount.toLocaleString()} EGP`;
+    const body = `غداً موعد استحقاق "${bill.name}" بقيمة ${bill.amount.toLocaleString()} ${currency}`;
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -189,7 +191,6 @@ class NotificationServiceManager {
       }
     }
 
-    // Web fallback logging
     return true;
   }
 
@@ -214,7 +215,8 @@ class NotificationServiceManager {
    */
   async syncAllBillReminders(
     bills: RecurringBill[],
-    notificationsEnabled = true
+    notificationsEnabled = true,
+    currencyByAccount?: Record<string, string>,
   ): Promise<void> {
     await this.init();
 
@@ -234,8 +236,9 @@ class NotificationServiceManager {
     }
 
     for (const bill of bills) {
-      if (bill.status === "active") {
-        await this.scheduleBillReminder(bill);
+      if (bill.status !== "paused") {
+        const cur = currencyByAccount?.[bill.accountId] || "EGP";
+        await this.scheduleBillReminder(bill, cur);
       } else {
         await this.cancelBillReminder(bill.id);
       }
@@ -251,8 +254,9 @@ class NotificationServiceManager {
     if (!hasPerm) return false;
 
     const testId = 999999;
-    const title = "تجربة إشعارات SubWise 🔔";
-    const body = "تم تفعيل إشعارات الفواتير والاشتراكات بنجاح! ستصلك التنبيهات دائماً قبل موعد الاستحقاق بـ 24 ساعة.";
+    const title = "تجربة إشعارات Walleteer 🔔";
+    const body =
+      "تم تفعيل إشعارات الفواتير والاشتراكات بنجاح! ستصلك التنبيهات دائماً قبل موعد الاستحقاق بـ 24 ساعة.";
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -280,7 +284,7 @@ class NotificationServiceManager {
     // Web Notification API fallback
     if (typeof window !== "undefined" && "Notification" in window) {
       try {
-        new Notification(title, { body, icon: "/sub-wise/icon-192x192.png" });
+        new Notification(title, { body, icon: "./icon-192x192.png" });
         return true;
       } catch {
         return false;

@@ -9,6 +9,8 @@ import {
   type FinancialCycle,
 } from "../lib/utils";
 
+import type { Page } from "../components/layout/Sidebar";
+
 // ── Insight Types ──────────────────────────────────────────────────
 
 export type InsightSeverity = "bad" | "warn" | "good" | "info";
@@ -19,6 +21,7 @@ export interface Insight {
   title: string;
   body: string;
   icon: string; // lucide icon name
+  targetPage?: Page;
 }
 
 export interface CycleStats {
@@ -75,6 +78,7 @@ export function useDashboardInsights() {
     accounts,
     budgets,
     recurring,
+    installments,
     savingsGoals,
     ious,
     settings,
@@ -99,39 +103,42 @@ export function useDashboardInsights() {
     const prevCycle = getFinancialCycle(prevRefDate, startDay);
 
     // ── Currency conversion helper ───────────────────────────────
-    const toBase = (amount: number, accountId: string) => {
-      const acc = accounts.find((a) => a.id === accountId);
-      return amountInBase(amount, acc, exchangeRates);
-    };
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
+    const toBase = (amount: number, accountId: string) =>
+      amountInBase(amount, accMap.get(accountId), exchangeRates);
 
-    // ── Filter transactions ──────────────────────────────────────
+    // ── Filter transactions (excluding IOUs & balance reconciliations) ──
 
     const cycleExpenses = transactions.filter(
       (tx) =>
         tx.type === "expense" &&
         cycle.isDateInCycle(tx.date) &&
-        !tx.isIou,
+        !tx.isIou &&
+        !tx.isReconciliation,
     );
 
     const cycleIncome = transactions.filter(
       (tx) =>
         tx.type === "income" &&
         cycle.isDateInCycle(tx.date) &&
-        !tx.isIou,
+        !tx.isIou &&
+        !tx.isReconciliation,
     );
 
     const prevCycleExpenses = transactions.filter(
       (tx) =>
         tx.type === "expense" &&
         prevCycle.isDateInCycle(tx.date) &&
-        !tx.isIou,
+        !tx.isIou &&
+        !tx.isReconciliation,
     );
 
     const prevCycleIncome = transactions.filter(
       (tx) =>
         tx.type === "income" &&
         prevCycle.isDateInCycle(tx.date) &&
-        !tx.isIou,
+        !tx.isIou &&
+        !tx.isReconciliation,
     );
 
     // ── Basic Metrics ────────────────────────────────────────────
@@ -217,6 +224,7 @@ export function useDashboardInsights() {
         (tx) =>
           tx.type === "expense" &&
           !tx.isIou &&
+          !tx.isReconciliation &&
           tx.date >= weekStartStr &&
           tx.date <= todayStr,
       )
@@ -234,6 +242,7 @@ export function useDashboardInsights() {
         (tx) =>
           tx.type === "expense" &&
           !tx.isIou &&
+          !tx.isReconciliation &&
           tx.date >= lastWeekStartStr &&
           tx.date <= lastWeekCutoffStr,
       )
@@ -252,7 +261,12 @@ export function useDashboardInsights() {
     let nw30Income = 0;
     let nw30Expenses = 0;
     for (const tx of transactions) {
-      if (tx.date < thirtyDaysAgo || tx.isIou || tx.type === "transfer")
+      if (
+        tx.date < thirtyDaysAgo ||
+        tx.isIou ||
+        tx.isReconciliation ||
+        tx.type === "transfer"
+      )
         continue;
       if (tx.type === "income")
         nw30Income += toBase(tx.amount, tx.accountId);
@@ -261,23 +275,34 @@ export function useDashboardInsights() {
     }
     const netWorthChange30d = nw30Income - nw30Expenses;
 
-    // ── Bills ────────────────────────────────────────────────────
+    // ── Bills & Installments ─────────────────────────────────────
 
     const in7DaysStr = addDaysISO(7);
-    const overdueBills = recurring.filter(
-      (r) =>
-        r.type === "expense" &&
-        r.status !== "paused" &&
-        r.nextDueDate < todayStr,
-    ).length;
+    const overdueBills =
+      recurring.filter(
+        (r) =>
+          r.type === "expense" &&
+          r.status !== "paused" &&
+          r.nextDueDate < todayStr,
+      ).length +
+      (installments ?? []).filter(
+        (i) => i.status === "active" && i.nextDueDate < todayStr,
+      ).length;
 
-    const upcomingBills7d = recurring.filter(
-      (r) =>
-        r.type === "expense" &&
-        r.status !== "paused" &&
-        r.nextDueDate >= todayStr &&
-        r.nextDueDate <= in7DaysStr,
-    ).length;
+    const upcomingBills7d =
+      recurring.filter(
+        (r) =>
+          r.type === "expense" &&
+          r.status !== "paused" &&
+          r.nextDueDate >= todayStr &&
+          r.nextDueDate <= in7DaysStr,
+      ).length +
+      (installments ?? []).filter(
+        (i) =>
+          i.status === "active" &&
+          i.nextDueDate >= todayStr &&
+          i.nextDueDate <= in7DaysStr,
+      ).length;
 
     // ── IOUs ─────────────────────────────────────────────────────
 
@@ -327,6 +352,7 @@ export function useDashboardInsights() {
         title: "Projected Overspend",
         body: `At your current pace you'll spend ~${overPct}% more than ${monthlyBudgetTarget > 0 ? "your target" : "your income"} this cycle.`,
         icon: "TrendingUp",
+        targetPage: "reports",
       });
     }
 
@@ -342,6 +368,7 @@ export function useDashboardInsights() {
           title: `${topCategory} Up ${changePct}%`,
           body: `Your top category is ${changePct}% higher than last cycle.`,
           icon: "ArrowUpRight",
+          targetPage: "reports",
         });
       }
     }
@@ -360,6 +387,7 @@ export function useDashboardInsights() {
             ? "You're spending more this week than last week at this point."
             : "Great job — spending less than last week so far.",
         icon: weekChangePercent > 0 ? "TrendingUp" : "TrendingDown",
+        targetPage: "transactions",
       });
     }
 
@@ -374,6 +402,7 @@ export function useDashboardInsights() {
           title: `${b.category} Over Budget`,
           body: `Spent ${Math.round(pct)}% of your ${b.category} budget.`,
           icon: "AlertCircle",
+          targetPage: "budgets",
         });
       } else if (pct >= 80) {
         insights.push({
@@ -382,29 +411,32 @@ export function useDashboardInsights() {
           title: `${b.category} at ${Math.round(pct)}%`,
           body: `Getting close to your ${b.category} budget limit.`,
           icon: "AlertTriangle",
+          targetPage: "budgets",
         });
       }
     }
 
-    // 5. Overdue bills
+    // 5. Overdue bills & installments
     if (overdueBills > 0) {
       insights.push({
         id: "overdue-bills",
         severity: "bad",
-        title: `${overdueBills} Overdue Bill${overdueBills > 1 ? "s" : ""}`,
-        body: "You have bills past their due date.",
+        title: `${overdueBills} Overdue Commitment${overdueBills > 1 ? "s" : ""}`,
+        body: "You have bills or installments past their due date.",
         icon: "CalendarClock",
+        targetPage: "commitments",
       });
     }
 
-    // 6. Upcoming bills
+    // 6. Upcoming bills & installments
     if (upcomingBills7d > 0) {
       insights.push({
         id: "upcoming-bills",
         severity: "info",
-        title: `${upcomingBills7d} Bill${upcomingBills7d > 1 ? "s" : ""} Due Soon`,
-        body: "Bills due within the next 7 days.",
+        title: `${upcomingBills7d} Payment${upcomingBills7d > 1 ? "s" : ""} Due Soon`,
+        body: "Bills or installments due within the next 7 days.",
         icon: "CalendarCheck",
+        targetPage: "commitments",
       });
     }
 
@@ -416,6 +448,7 @@ export function useDashboardInsights() {
         title: `${overdueIous} Overdue IOU${overdueIous > 1 ? "s" : ""}`,
         body: "Money lent that's past the expected return date.",
         icon: "UserCheck",
+        targetPage: "ious",
       });
     }
 
@@ -427,6 +460,7 @@ export function useDashboardInsights() {
         title: `"${nearestGoal.name}" ${nearestGoal.daysLeft}d Left`,
         body: `Goal is ${nearestGoal.percent}% funded with ${nearestGoal.daysLeft} days remaining.`,
         icon: "Target",
+        targetPage: "goals",
       });
     }
 
@@ -438,6 +472,7 @@ export function useDashboardInsights() {
         title: `Saving ${savingsRate}% This Cycle`,
         body: "You're saving a healthy portion of your income.",
         icon: "PiggyBank",
+        targetPage: "reports",
       });
     }
 
@@ -449,6 +484,7 @@ export function useDashboardInsights() {
         title: "Backup Recommended",
         body: "It's been a while since your last data backup.",
         icon: "ShieldAlert",
+        targetPage: "settings",
       });
     }
 
@@ -460,6 +496,7 @@ export function useDashboardInsights() {
         title: "Set a Spending Target",
         body: "A monthly spending target helps the Safe-to-Spend engine work better.",
         icon: "Crosshair",
+        targetPage: "settings",
       });
     }
 
@@ -500,6 +537,7 @@ export function useDashboardInsights() {
     accounts,
     budgets,
     recurring,
+    installments,
     savingsGoals,
     ious,
     settings,

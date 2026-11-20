@@ -4,11 +4,12 @@ import { MainContent } from "./components/layout/MainContent";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { ToastContainer } from "./components/ui/Toast";
 import { OfflineBanner } from "./components/ui/OfflineBanner";
+import { AppLockScreen } from "./components/ui/AppLockScreen";
 import { AddTransactionModal } from "./components/transactions/AddTransactionModal";
 import { useStore } from "./store/useStore";
 import { initCapacitorApp } from "./lib/capacitorInit";
 import { NotificationService } from "./lib/NotificationService";
-import { registerBackHandler } from "./lib/backButtonManager";
+import { getAccountBalanceCurrency } from "./lib/utils";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import "./index.css";
@@ -29,7 +30,28 @@ const VALID_PAGES: Page[] = [
 
 function AppContent() {
   const processRecurring = useStore((s) => s.processRecurringTransactions);
+  const recurring = useStore((s) => s.recurring);
+  const accounts = useStore((s) => s.accounts);
+  const notificationsEnabled = useStore(
+    (s) => s.settings.notificationsEnabled !== false,
+  );
+  const language = useStore((s) => s.settings.language ?? "en");
+  const pinHash = useStore((s) => s.settings.pinHash);
+  const autoLockOnResume = useStore((s) => s.settings.autoLockOnResume);
+
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => Boolean(pinHash));
+
+  // If user clears PIN while unlocked, ensure lock screen stays dismissed
+  useEffect(() => {
+    if (!pinHash) setIsLocked(false);
+  }, [pinHash]);
+
+  // Apply RTL/LTR direction and lang attribute to <html>
+  useEffect(() => {
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+    document.documentElement.lang = language;
+  }, [language]);
 
   // Hash-based routing
   const [page, setPage] = useState<Page>(() => {
@@ -52,49 +74,86 @@ function AppContent() {
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  // Process recurring transactions & sync notifications on app load
-  const recurring = useStore((s) => s.recurring);
-  const notificationsEnabled = useStore((s) => s.settings.notificationsEnabled !== false);
-
+  // Initialize native Capacitor bindings ONCE on mount (fixes back-button listener leak)
   useEffect(() => {
     initCapacitorApp();
     processRecurring();
-    NotificationService.syncAllBillReminders(recurring, notificationsEnabled).catch(() => {});
-  }, [processRecurring, recurring, notificationsEnabled]);
-
-  // Re-sync on app resume (foreground)
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) {
-        processRecurring();
-        NotificationService.syncAllBillReminders(
-          useStore.getState().recurring,
-          useStore.getState().settings.notificationsEnabled !== false
-        ).catch(() => {});
-      }
-    });
-    return () => {
-      sub.then((h) => h.remove());
-    };
   }, [processRecurring]);
 
-  // Back button handler for Quick Add modal
+  // Sync scheduled bill notifications whenever bills, accounts, or notification toggle changes
   useEffect(() => {
-    if (!showQuickAdd) return;
-    const unregister = registerBackHandler(() => {
-      setShowQuickAdd(false);
-      return true;
-    });
-    return unregister;
-  }, [showQuickAdd]);
+    const currencyByAccount: Record<string, string> = {};
+    for (const acc of accounts) {
+      currencyByAccount[acc.id] = getAccountBalanceCurrency(acc);
+    }
+    NotificationService.syncAllBillReminders(
+      recurring,
+      notificationsEnabled,
+      currencyByAccount,
+    ).catch(() => {});
+  }, [recurring, accounts, notificationsEnabled]);
+
+  // Re-sync & optional auto-lock on app resume (Capacitor + Web visibilitychange)
+  useEffect(() => {
+    const onResume = () => {
+      const state = useStore.getState();
+      state.processRecurringTransactions();
+      const map: Record<string, string> = {};
+      for (const acc of state.accounts) {
+        map[acc.id] = getAccountBalanceCurrency(acc);
+      }
+      NotificationService.syncAllBillReminders(
+        state.recurring,
+        state.settings.notificationsEnabled !== false,
+        map,
+      ).catch(() => {});
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        const s = useStore.getState().settings;
+        if (s.pinHash && s.autoLockOnResume) {
+          setIsLocked(true);
+        }
+      } else if (document.visibilityState === "visible") {
+        onResume();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    let capCleanup: (() => void) | undefined;
+    if (Capacitor.isNativePlatform()) {
+      const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) {
+          onResume();
+        } else {
+          const s = useStore.getState().settings;
+          if (s.pinHash && s.autoLockOnResume) {
+            setIsLocked(true);
+          }
+        }
+      });
+      capCleanup = () => {
+        sub.then((h) => h.remove());
+      };
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      capCleanup?.();
+    };
+  }, [autoLockOnResume]);
 
   // Global 'N' keyboard shortcut for Quick-Add Transaction
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is inside an input, textarea or contenteditable element
+      if (isLocked) return;
       const activeTag = document.activeElement?.tagName;
-      if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") {
+      if (
+        activeTag === "INPUT" ||
+        activeTag === "TEXTAREA" ||
+        activeTag === "SELECT"
+      ) {
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -107,9 +166,9 @@ function AppContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isLocked]);
 
-  // Prevent zoom gestures (pinch-to-zoom and multi-touch zoom on mobile/Safari/desktop)
+  // Prevent zoom gestures on mobile/Safari/desktop
   useEffect(() => {
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 1) {
@@ -149,11 +208,18 @@ function AppContent() {
         page={page}
         onChangePage={setPage}
         onOpenQuickAdd={() => setShowQuickAdd(true)}
+        onLockApp={pinHash ? () => setIsLocked(true) : undefined}
       />
       {showQuickAdd && (
         <AddTransactionModal
           autoOpen
           onClose={() => setShowQuickAdd(false)}
+        />
+      )}
+      {isLocked && pinHash && (
+        <AppLockScreen
+          expectedHash={pinHash}
+          onUnlock={() => setIsLocked(false)}
         />
       )}
       <ToastContainer />

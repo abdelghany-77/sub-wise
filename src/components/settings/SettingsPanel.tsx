@@ -17,6 +17,12 @@ import {
   Coins,
   Bell,
   Smartphone,
+  Lock,
+  Languages,
+  Tags,
+  Plus,
+  Copy,
+  X,
 } from "lucide-react";
 import { NotificationService } from "../../lib/NotificationService";
 import { useStore, type AppSettings } from "../../store/useStore";
@@ -27,18 +33,25 @@ import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import {
   formatCurrency,
+  getAccountBalanceCurrency,
   getFinancialCycle,
+  hashPin,
   parseLocalDate,
+  shareOrDownloadFile,
+  todayISO,
   cn,
 } from "../../lib/utils";
-import type {
-  Account,
-  Transaction,
-  Budget,
-  SavingsGoal,
-  RecurringBill,
-  Iou,
-  ExchangeRates,
+import {
+  PRESET_COLORS,
+  type Account,
+  type Transaction,
+  type Budget,
+  type SavingsGoal,
+  type RecurringBill,
+  type Iou,
+  type Installment,
+  type CustomCategory,
+  type ExchangeRates,
 } from "../../types";
 
 type TabId = "general" | "budget" | "data";
@@ -50,6 +63,8 @@ interface ImportPayload {
   savingsGoals?: SavingsGoal[];
   recurring?: RecurringBill[];
   ious?: Iou[];
+  installments?: Installment[];
+  customCategories?: CustomCategory[];
   exchangeRates?: ExchangeRates;
   monthlyBudgetTarget?: number;
   settings?: Partial<AppSettings>;
@@ -235,6 +250,10 @@ export function SettingsPanel() {
     savingsGoals,
     recurring,
     ious,
+    installments,
+    customCategories,
+    addCustomCategory,
+    deleteCustomCategory,
     exchangeRates,
     importData,
     clearAll,
@@ -245,8 +264,19 @@ export function SettingsPanel() {
   const addToast = useToastStore((s) => s.addToast);
 
   const privacyLabelId = useId();
+  const autoLockLabelId = useId();
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [permStatus, setPermStatus] = useState<"granted" | "denied" | "prompt">("prompt");
+
+  // PIN management state
+  const [pinInput, setPinInput] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinError, setPinError] = useState("");
+
+  // Custom Category state
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatType, setNewCatType] = useState<"expense" | "income">("expense");
+  const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]);
 
   useEffect(() => {
     NotificationService.checkPermissions().then(setPermStatus);
@@ -300,33 +330,93 @@ export function SettingsPanel() {
     });
   };
 
-  const handleExport = () => {
+  const buildBackupJson = () => {
     const now = new Date().toISOString();
-    const payload = {
-      exportedAt: now,
-      version: "2.0",
-      accounts,
-      transactions,
-      budgets,
-      savingsGoals,
-      recurring,
-      ious,
-      exchangeRates,
-      settings,
-      monthlyBudgetTarget,
-      lastBackupDate: now,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `walleteer-backup-${now.split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    return JSON.stringify(
+      {
+        exportedAt: now,
+        version: "4.0",
+        accounts,
+        transactions,
+        budgets,
+        savingsGoals,
+        recurring,
+        ious,
+        installments,
+        customCategories,
+        exchangeRates,
+        settings,
+        monthlyBudgetTarget,
+        lastBackupDate: now,
+      },
+      null,
+      2,
+    );
+  };
+
+  const handleExport = async () => {
+    const json = buildBackupJson();
+    const filename = `walleteer-backup-${todayISO()}.json`;
+    const result = await shareOrDownloadFile(json, filename, "application/json");
     recordBackup();
-    addToast({ type: "success", message: "Backup downloaded." });
+    addToast({
+      type: "success",
+      message:
+        result === "shared"
+          ? "Backup shared successfully."
+          : "Backup downloaded.",
+    });
+  };
+
+  const handleCopyBackup = async () => {
+    try {
+      await navigator.clipboard.writeText(buildBackupJson());
+      recordBackup();
+      addToast({
+        type: "success",
+        message: "Backup JSON copied to clipboard.",
+      });
+    } catch {
+      addToast({
+        type: "warning",
+        message: "Couldn't access clipboard on this device.",
+      });
+    }
+  };
+
+  const handleSavePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{4}$/.test(pinInput)) {
+      setPinError("Enter exactly 4 numeric digits.");
+      return;
+    }
+    if (pinInput !== pinConfirm) {
+      setPinError("PINs do not match.");
+      return;
+    }
+    const hashed = await hashPin(pinInput);
+    updateSettings({ pinHash: hashed });
+    setPinInput("");
+    setPinConfirm("");
+    setPinError("");
+    addToast({ type: "success", message: "4-digit App Lock PIN saved." });
+  };
+
+  const handleRemovePin = () => {
+    updateSettings({ pinHash: null, autoLockOnResume: false });
+    addToast({ type: "info", message: "App Lock PIN removed." });
+  };
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCatName.trim();
+    if (!trimmed) return;
+    addCustomCategory({
+      name: trimmed,
+      type: newCatType,
+      color: newCatColor,
+    });
+    setNewCatName("");
   };
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -344,7 +434,9 @@ export function SettingsPanel() {
         !isOptionalArray(data.budgets) ||
         !isOptionalArray(data.savingsGoals) ||
         !isOptionalArray(data.recurring) ||
-        !isOptionalArray(data.ious)
+        !isOptionalArray(data.ious) ||
+        !isOptionalArray(data.installments) ||
+        !isOptionalArray(data.customCategories)
       ) {
         throw new Error("Invalid file format");
       }
@@ -355,6 +447,8 @@ export function SettingsPanel() {
         savingsGoals: data.savingsGoals,
         recurring: data.recurring,
         ious: data.ious,
+        installments: data.installments,
+        customCategories: data.customCategories,
         exchangeRates:
           data.exchangeRates && typeof data.exchangeRates === "object"
             ? data.exchangeRates
@@ -397,7 +491,7 @@ export function SettingsPanel() {
   const dataStats = [
     { label: "Accounts", value: accounts.length },
     { label: "Transactions", value: transactions.length },
-    { label: "Recurring", value: recurring.length },
+    { label: "Plans & Bills", value: recurring.length + installments.length },
     { label: "Budgets", value: budgets.length },
   ];
 
@@ -473,6 +567,40 @@ export function SettingsPanel() {
                   description="Base currency and date display format"
                 />
                 <div className="space-y-3">
+                  {/* Language & RTL Switcher */}
+                  <div>
+                    <span className="label-base flex items-center gap-1.5">
+                      <Languages size={12} className="text-blue-400" />
+                      Language & Layout Direction
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ language: "en" })}
+                        className={cn(
+                          "py-2 rounded-lg text-xs font-semibold transition-all",
+                          (settings.language ?? "en") === "en"
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-white/55 hover:text-white",
+                        )}
+                      >
+                        English (LTR)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ language: "ar" })}
+                        className={cn(
+                          "py-2 rounded-lg text-xs font-semibold transition-all",
+                          settings.language === "ar"
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-white/55 hover:text-white",
+                        )}
+                      >
+                        العربية (RTL)
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Read-only currency info tile */}
                   <div className="p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center flex-shrink-0">
@@ -505,8 +633,8 @@ export function SettingsPanel() {
                 <SectionHeader
                   icon={Shield}
                   tint="violet"
-                  title="Privacy"
-                  description="Blur balances and sensitive figures"
+                  title="Privacy & Security Lock"
+                  description="Hide balances and protect the app with a 4-digit PIN"
                 />
                 <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                   <div className="min-w-0">
@@ -529,6 +657,176 @@ export function SettingsPanel() {
                     labelledBy={privacyLabelId}
                   />
                 </div>
+
+                {/* 4-Digit PIN Setup */}
+                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Lock size={14} className="text-violet-400 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-white">
+                        4-Digit App PIN
+                      </span>
+                    </div>
+                    {settings.pinHash && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                        Active
+                      </span>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSavePin} className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder={settings.pinHash ? "New PIN" : "4-digit PIN"}
+                        value={pinInput}
+                        onChange={(e) => {
+                          setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4));
+                          setPinError("");
+                        }}
+                        className="input-base text-xs py-2 font-mono tracking-widest text-center"
+                      />
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="Confirm PIN"
+                        value={pinConfirm}
+                        onChange={(e) => {
+                          setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4));
+                          setPinError("");
+                        }}
+                        className="input-base text-xs py-2 font-mono tracking-widest text-center"
+                      />
+                    </div>
+                    {pinError && (
+                      <p className="text-[11px] text-rose-400">{pinError}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button type="submit" size="sm" className="flex-1">
+                        {settings.pinHash ? "Update PIN" : "Enable PIN Lock"}
+                      </Button>
+                      {settings.pinHash && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleRemovePin}
+                          className="text-rose-300 hover:bg-rose-500/10"
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+
+                  {settings.pinHash && (
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/[0.06]">
+                      <span id={autoLockLabelId} className="text-xs text-white/60">
+                        Auto-lock when leaving app
+                      </span>
+                      <Switch
+                        checked={settings.autoLockOnResume ?? false}
+                        onChange={() =>
+                          updateSettings({
+                            autoLockOnResume: !(settings.autoLockOnResume ?? false),
+                          })
+                        }
+                        labelledBy={autoLockLabelId}
+                      />
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Custom Categories Manager */}
+              <Card padding="sm" className="space-y-3 lg:col-span-2">
+                <SectionHeader
+                  icon={Tags}
+                  tint="sky"
+                  title="Custom Categories"
+                  description="Create your own expense or income categories for transactions, budgets, and reports"
+                />
+                <form
+                  onSubmit={handleAddCategory}
+                  className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="e.g. Coffee, Pet Care, Bonus..."
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    className="input-base text-xs py-2 flex-1"
+                  />
+                  <select
+                    value={newCatType}
+                    onChange={(e) =>
+                      setNewCatType(e.target.value as "expense" | "income")
+                    }
+                    className="input-base text-xs py-2 sm:w-32 [&>option]:bg-[#111827]"
+                    aria-label="Category type"
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                  <div className="flex items-center gap-1.5 justify-between sm:justify-start">
+                    <div className="flex items-center gap-1">
+                      {PRESET_COLORS.slice(0, 6).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setNewCatColor(c)}
+                          aria-label={`Color ${c}`}
+                          className={cn(
+                            "w-6 h-6 rounded-full transition-transform",
+                            newCatColor === c
+                              ? "ring-2 ring-white scale-110"
+                              : "opacity-60 hover:opacity-100",
+                          )}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      icon={<Plus size={14} />}
+                      disabled={!newCatName.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </form>
+
+                {customCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {customCategories.map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.08] text-white/85"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: c.color }}
+                        />
+                        <span>{c.name}</span>
+                        <span className="text-[10px] text-white/35 capitalize">
+                          ({c.type})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomCategory(c.id)}
+                          aria-label={`Delete category ${c.name}`}
+                          className="p-0.5 rounded-full text-white/40 hover:text-rose-400 hover:bg-rose-500/15 transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </Card>
 
               <Card padding="sm" className="space-y-3 lg:col-span-2">
@@ -656,7 +954,15 @@ export function SettingsPanel() {
                         setPermStatus(granted ? "granted" : "denied");
                       }
                       updateSettings({ notificationsEnabled: nextVal });
-                      await NotificationService.syncAllBillReminders(recurring, nextVal);
+                      const currencyByAccount: Record<string, string> = {};
+                      for (const acc of accounts) {
+                        currencyByAccount[acc.id] = getAccountBalanceCurrency(acc);
+                      }
+                      await NotificationService.syncAllBillReminders(
+                        recurring,
+                        nextVal,
+                        currencyByAccount,
+                      );
                       addToast({
                         type: nextVal ? "success" : "info",
                         message: nextVal
@@ -914,19 +1220,26 @@ export function SettingsPanel() {
                   className="hidden"
                   aria-label="Import backup file"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <ActionTile
                     icon={Download}
                     tint="blue"
-                    title="Export backup"
-                    description="Download all data as JSON"
+                    title="Export / Share"
+                    description="Save or share JSON backup"
                     onClick={handleExport}
+                  />
+                  <ActionTile
+                    icon={Copy}
+                    tint="violet"
+                    title="Copy JSON"
+                    description="Copy backup to clipboard"
+                    onClick={handleCopyBackup}
                   />
                   <ActionTile
                     icon={Upload}
                     tint="sky"
                     title="Import backup"
-                    description="Replace data from a JSON file"
+                    description="Restore from a JSON file"
                     onClick={() => fileInputRef.current?.click()}
                   />
                 </div>

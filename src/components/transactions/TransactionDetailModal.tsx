@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { useToastStore } from "../../store/useToastStore";
-import { cn, formatCurrency, formatFullDate, todayISO } from "../../lib/utils";
+import {
+  cn,
+  formatCurrency,
+  formatFullDate,
+  getAccountBalanceCurrency,
+  todayISO,
+} from "../../lib/utils";
+import { registerBackHandler } from "../../lib/backButtonManager";
 import type { Account, Transaction } from "../../types";
 import { AddTransactionModal } from "./AddTransactionModal";
 import {
@@ -32,7 +39,7 @@ interface Props {
 }
 
 function accountCurrency(acc?: Account) {
-  return acc?.exchangeRateToBase ? "EGP" : (acc?.currency ?? "EGP");
+  return getAccountBalanceCurrency(acc);
 }
 
 function DetailRow({
@@ -103,6 +110,7 @@ function AccountChip({
 
 export function TransactionDetailModal({ transaction, onClose }: Props) {
   const accounts = useStore((s) => s.accounts);
+  const customCategories = useStore((s) => s.customCategories);
   const getAccountById = (id: string) => accounts.find((a) => a.id === id);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
   const addTransaction = useStore((s) => s.addTransaction);
@@ -122,15 +130,21 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
 
   useEffect(() => {
     if (!isOpen || mode === "edit") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+    const handleBack = () => {
       if (mode === "confirmDelete") setMode("view");
       else onClose();
+      return true;
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      handleBack();
+    };
+    const unregisterBack = registerBackHandler(handleBack);
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     const timer = setTimeout(() => closeButtonRef.current?.focus(), 50);
     return () => {
+      unregisterBack();
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
       clearTimeout(timer);
@@ -149,8 +163,13 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
   const meta = TX_TYPE_META[tx.type];
   const fromAcc = getAccountById(tx.accountId);
   const toAcc = tx.toAccountId ? getAccountById(tx.toAccountId) : undefined;
-  const currency = fromAcc?.currency || "EGP";
-  const catColor = getCategoryColor(tx);
+  const currency = getAccountBalanceCurrency(fromAcc);
+  const destCurrency = getAccountBalanceCurrency(toAcc);
+  const hasCrossCurrencyCredit =
+    tx.type === "transfer" &&
+    tx.toAmount !== undefined &&
+    (tx.toAmount !== tx.amount || currency !== destCurrency);
+  const catColor = getCategoryColor(tx, customCategories);
   const CategoryIcon = getCategoryIcon(tx.category, tx.type);
   const title = tx.note || tx.category;
   const reference = tx.id.slice(-8).toUpperCase();
@@ -160,6 +179,7 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
     addTransaction({
       type: tx.type,
       amount: tx.amount,
+      toAmount: tx.toAmount,
       category: tx.category,
       note: tx.note ? `${tx.note} (Copy)` : "Copy",
       date: todayISO(),
@@ -239,9 +259,9 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
               ref={closeButtonRef}
               onClick={onClose}
               aria-label="Close"
-              className="p-1.5 rounded-xl text-white/50 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-white/50 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
@@ -262,6 +282,16 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
               {meta.sign}
               {formatCurrency(tx.amount, currency)}
             </p>
+            {hasCrossCurrencyCredit && tx.toAmount !== undefined && (
+              <p
+                className={cn(
+                  "text-xs font-mono text-sky-300/90 mt-1",
+                  privacyMode && "privacy-blur",
+                )}
+              >
+                → Received {formatCurrency(tx.toAmount, destCurrency)}
+              </p>
+            )}
             <h3 className="mt-1.5 text-sm font-semibold text-white max-w-full truncate px-2">
               {title}
             </h3>
@@ -378,13 +408,13 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
               <div className="flex gap-2.5">
                 <button
                   onClick={() => setMode("view")}
-                  className="flex-1 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-sm font-semibold text-white/80 border border-white/[0.08] transition-colors"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-sm font-semibold text-white/80 border border-white/[0.08] transition-colors"
                 >
                   Keep
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm font-semibold text-white shadow-lg shadow-rose-900/40 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm font-semibold text-white shadow-lg shadow-rose-900/40 transition-colors flex items-center justify-center gap-2"
                 >
                   <Trash2 size={15} />
                   Delete
@@ -395,14 +425,14 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
             <div className="flex gap-2.5">
               <button
                 onClick={() => setMode("edit")}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition-colors flex items-center justify-center gap-2"
               >
                 <Pencil size={15} />
                 Edit
               </button>
               <button
                 onClick={handleDuplicate}
-                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-sm font-semibold text-white/85 border border-white/[0.08] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 min-h-[44px] py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-sm font-semibold text-white/85 border border-white/[0.08] transition-colors flex items-center justify-center gap-2"
               >
                 <Copy size={15} />
                 Duplicate
@@ -410,7 +440,7 @@ export function TransactionDetailModal({ transaction, onClose }: Props) {
               <button
                 onClick={() => setMode("confirmDelete")}
                 aria-label="Delete transaction"
-                className="px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                className="min-h-[44px] min-w-[44px] px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors flex items-center justify-center"
               >
                 <Trash2 size={16} />
               </button>

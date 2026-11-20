@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, cn } from "../../lib/utils";
+import { formatCurrency, amountInBase, cn } from "../../lib/utils";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -27,7 +27,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       {payload.map((p) => (
         <p
           key={p.name}
-          className="text-sm font-mono font-medium"
+          className="text-sm font-mono font-medium tabular-nums"
           style={{ color: p.color }}
         >
           {p.name}: {formatCurrency(p.value)}
@@ -38,9 +38,10 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function IncomeExpenseChart() {
-  const { transactions, accounts, privacyMode } = useStore();
+  const { transactions, accounts, exchangeRates, privacyMode } = useStore();
 
   const chartData = useMemo(() => {
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
     const now = new Date();
     const months: {
       key: string;
@@ -60,17 +61,22 @@ export function IncomeExpenseChart() {
     }
 
     for (const tx of transactions) {
-      if (tx.type === "transfer") continue;
+      if (tx.type === "transfer" || tx.isIou || tx.isReconciliation) continue;
       const txMonth = tx.date.slice(0, 7);
       const entry = months.find((m) => m.key === txMonth);
       if (entry) {
-        if (tx.type === "income") entry.income += tx.amount;
-        else entry.expense += tx.amount;
+        const baseAmt = amountInBase(
+          tx.amount,
+          accMap.get(tx.accountId),
+          exchangeRates,
+        );
+        if (tx.type === "income") entry.income += baseAmt;
+        else entry.expense += baseAmt;
       }
     }
 
     return months;
-  }, [transactions, accounts]);
+  }, [transactions, accounts, exchangeRates]);
 
   if (chartData.every((d) => d.income === 0 && d.expense === 0)) {
     return (

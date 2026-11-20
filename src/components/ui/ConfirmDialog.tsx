@@ -11,13 +11,34 @@ interface Props {
   variant?: "danger" | "primary";
 }
 
-export function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel = "Delete", variant = "danger" }: Props) {
+export function ConfirmDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "Delete",
+  variant = "danger",
+}: Props) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-white/50 text-sm mb-6">{message}</p>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" compact>
+      <p className="text-white/60 text-sm leading-relaxed mb-6">{message}</p>
       <div className="flex gap-3">
-        <Button variant="ghost" onClick={onClose} className="flex-1">Cancel</Button>
-        <Button variant={variant} className="flex-1" onClick={() => { onConfirm(); onClose(); }}>
+        <Button
+          variant="ghost"
+          onClick={onClose}
+          className="flex-1 min-h-[44px]"
+        >
+          Cancel
+        </Button>
+        <Button
+          variant={variant}
+          className="flex-1 min-h-[44px]"
+          onClick={() => {
+            onConfirm();
+            onClose();
+          }}
+        >
           {confirmLabel}
         </Button>
       </div>

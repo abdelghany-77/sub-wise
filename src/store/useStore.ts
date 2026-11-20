@@ -7,6 +7,9 @@ import type {
   SavingsGoal,
   RecurringBill,
   Iou,
+  Installment,
+  CustomCategory,
+  AppLanguage,
   ExchangeRates,
   SafeToSpendResult,
   NetWorthBreakdown,
@@ -20,6 +23,9 @@ import {
   nextRecurrenceDate,
   parseLocalDate,
   accountBalanceInBase,
+  amountInBase,
+  convertTransferAmount,
+  getAccountBalanceCurrency,
   setDateFormatPreference,
 } from "../lib/utils";
 import { DEMO_ACCOUNTS, DEMO_TRANSACTIONS } from "../data/demo";
@@ -48,6 +54,9 @@ export interface AppSettings {
   weekStartsOn: "sunday" | "monday" | "saturday";
   monthStartsOnDay: number; // 1 to 31 (e.g. 26 for salary payday)
   notificationsEnabled: boolean;
+  language: AppLanguage;
+  pinHash: string | null;
+  autoLockOnResume: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -56,6 +65,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   weekStartsOn: "saturday",
   monthStartsOnDay: 1,
   notificationsEnabled: true,
+  language: "en",
+  pinHash: null,
+  autoLockOnResume: false,
 };
 
 export const INITIAL_RECURRING: RecurringBill[] = [
@@ -129,16 +141,26 @@ interface WealthState {
   savingsGoals: SavingsGoal[];
   recurring: RecurringBill[];
   ious: Iou[];
+  installments: Installment[];
+  customCategories: CustomCategory[];
   exchangeRates: ExchangeRates;
+  ratesUpdatedAt: string | null;
   monthlyBudgetTarget: number;
   lastBackupDate: string | null;
   transactionsSinceLastBackup: number;
   privacyMode: boolean;
+  isDemoData: boolean;
   settings: AppSettings;
 
   // Actions - Core
   togglePrivacyMode: () => void;
   updateSettings: (updates: Partial<AppSettings>) => void;
+  dismissDemoMode: () => void;
+  startFresh: () => void;
+
+  // Custom Categories
+  addCustomCategory: (cat: Omit<CustomCategory, "id">) => void;
+  deleteCustomCategory: (id: string) => void;
 
   // Accounts
   addAccount: (account: Omit<Account, "id" | "createdAt">) => void;
@@ -157,6 +179,7 @@ interface WealthState {
     updates: Omit<Transaction, "id" | "createdAt">,
   ) => void;
   deleteTransaction: (id: string) => void;
+  stopRecurringTransaction: (id: string) => void;
 
   // Budgets
   addBudget: (budget: Omit<Budget, "id" | "createdAt">) => void;
@@ -183,6 +206,14 @@ interface WealthState {
   deleteRecurring: (id: string) => void;
   markBillAsPaid: (id: string, customDate?: string) => void;
 
+  // Installments / BNPL
+  addInstallment: (
+    plan: Omit<Installment, "id" | "createdAt" | "status">,
+  ) => void;
+  updateInstallment: (id: string, updates: Partial<Installment>) => void;
+  deleteInstallment: (id: string) => void;
+  payInstallment: (id: string, customDate?: string) => void;
+
   // IOUs (Lent / Borrowed)
   addIou: (
     iou: Omit<Iou, "id" | "createdAt" | "status">,
@@ -191,7 +222,11 @@ interface WealthState {
   updateIou: (id: string, updates: Partial<Iou>) => void;
   /** When `reverseTransactions` is true the IOU's ledger entries are deleted and balances restored. */
   deleteIou: (id: string, reverseTransactions?: boolean) => void;
-  settleIou: (id: string, targetAccountId?: string) => void;
+  settleIou: (
+    id: string,
+    targetAccountId?: string,
+    partialAmount?: number,
+  ) => void;
 
   // Multi-Currency & Gold Asset Vault
   updateExchangeRates: (rates: Partial<ExchangeRates>) => void;
@@ -212,6 +247,8 @@ interface WealthState {
     savingsGoals?: SavingsGoal[];
     recurring?: RecurringBill[];
     ious?: Iou[];
+    installments?: Installment[];
+    customCategories?: CustomCategory[];
     exchangeRates?: ExchangeRates;
     monthlyBudgetTarget?: number;
     lastBackupDate?: string | null;
@@ -242,6 +279,7 @@ function reverseTransactionEffect(
   accounts: Account[],
   tx: Transaction,
 ): Account[] {
+  const creditAmount = tx.toAmount ?? tx.amount;
   return syncUnitBalances(
     accounts.map((acc) => {
       if (tx.type === "income" && acc.id === tx.accountId) {
@@ -254,7 +292,7 @@ function reverseTransactionEffect(
         if (acc.id === tx.accountId)
           return { ...acc, balance: acc.balance + tx.amount };
         if (acc.id === tx.toAccountId)
-          return { ...acc, balance: acc.balance - tx.amount };
+          return { ...acc, balance: acc.balance - creditAmount };
       }
       return acc;
     }),
@@ -264,23 +302,38 @@ function reverseTransactionEffect(
 const isSettlementTx = (tx: Transaction) =>
   tx.category.startsWith("Settlement");
 
+function buildCurrencyByAccount(accounts: Account[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const a of accounts) {
+    map[a.id] = getAccountBalanceCurrency(a);
+  }
+  return map;
+}
+
 /** Warn when the budget for the just-spent category crosses 80% or 100% */
 function checkBudgetAlerts(
   budgets: Budget[],
   transactions: Transaction[],
+  accounts: Account[],
+  exchangeRates: ExchangeRates,
   category: string,
   monthStartsOnDay = 1,
 ) {
   const cycle = getFinancialCycle(new Date(), monthStartsOnDay);
+  const accMap = new Map(accounts.map((a) => [a.id, a]));
 
   const spending: Record<string, number> = {};
   transactions
     .filter(
       (tx) =>
-        tx.type === "expense" && cycle.isDateInCycle(tx.date) && !tx.isIou,
+        tx.type === "expense" &&
+        cycle.isDateInCycle(tx.date) &&
+        !tx.isIou &&
+        !tx.isReconciliation,
     )
     .forEach((tx) => {
-      spending[tx.category] = (spending[tx.category] ?? 0) + tx.amount;
+      const baseAmt = amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates);
+      spending[tx.category] = (spending[tx.category] ?? 0) + baseAmt;
     });
 
   const { addToast } = useToastStore.getState();
@@ -314,14 +367,63 @@ export const useStore = create<WealthState>()(
       savingsGoals: [],
       recurring: INITIAL_RECURRING,
       ious: INITIAL_IOUS,
+      installments: [],
+      customCategories: [],
       exchangeRates: DEFAULT_EXCHANGE_RATES,
+      ratesUpdatedAt: null,
       monthlyBudgetTarget: 0,
       lastBackupDate: null,
       transactionsSinceLastBackup: 0,
       privacyMode: false,
+      isDemoData: true,
       settings: DEFAULT_SETTINGS,
 
       togglePrivacyMode: () => set((s) => ({ privacyMode: !s.privacyMode })),
+
+      dismissDemoMode: () => set({ isDemoData: false }),
+
+      startFresh: () => {
+        set({
+          accounts: [],
+          transactions: [],
+          budgets: [],
+          savingsGoals: [],
+          recurring: [],
+          ious: [],
+          installments: [],
+          monthlyBudgetTarget: 0,
+          lastBackupDate: null,
+          transactionsSinceLastBackup: 0,
+          isDemoData: false,
+        });
+        useToastStore.getState().addToast({
+          type: "success",
+          message: "Sample data cleared! Add your first account to begin.",
+        });
+      },
+
+      addCustomCategory: (cat) => {
+        const trimmed = cat.name.trim();
+        if (!trimmed) return;
+        const exists = get().customCategories.some(
+          (c) =>
+            c.name.toLowerCase() === trimmed.toLowerCase() &&
+            c.type === cat.type,
+        );
+        if (exists) return;
+        set((s) => ({
+          customCategories: [
+            ...s.customCategories,
+            { ...cat, name: trimmed, id: generateId() },
+          ],
+        }));
+      },
+
+      deleteCustomCategory: (id) => {
+        set((s) => ({
+          customCategories: s.customCategories.filter((c) => c.id !== id),
+        }));
+      },
 
       updateSettings: (updates) => {
         set((s) => {
@@ -332,7 +434,8 @@ export const useStore = create<WealthState>()(
           if (updates.notificationsEnabled !== undefined) {
             NotificationService.syncAllBillReminders(
               s.recurring,
-              next.notificationsEnabled
+              next.notificationsEnabled,
+              buildCurrencyByAccount(s.accounts),
             ).catch(() => {});
           }
           return { settings: next };
@@ -397,6 +500,7 @@ export const useStore = create<WealthState>()(
             ),
             recurring: s.recurring.filter((r) => r.accountId !== id),
             ious: s.ious.filter((i) => i.accountId !== id),
+            installments: s.installments.filter((inst) => inst.accountId !== id),
             savingsGoals: s.savingsGoals.map((g) =>
               g.accountId === id ? { ...g, accountId: undefined } : g,
             ),
@@ -448,11 +552,30 @@ export const useStore = create<WealthState>()(
       },
 
       addTransaction: (tx) => {
+        const stateBefore = get();
+        let computedToAmount = tx.toAmount;
+        if (tx.type === "transfer" && tx.toAccountId && computedToAmount === undefined) {
+          const fromAcc = stateBefore.accounts.find((a) => a.id === tx.accountId);
+          const toAcc = stateBefore.accounts.find((a) => a.id === tx.toAccountId);
+          const converted = convertTransferAmount(
+            tx.amount,
+            fromAcc,
+            toAcc,
+            stateBefore.exchangeRates,
+          );
+          if (converted !== tx.amount) {
+            computedToAmount = converted;
+          }
+        }
+
         const newTx: Transaction = {
           ...tx,
+          ...(computedToAmount !== undefined ? { toAmount: computedToAmount } : {}),
           id: generateId(),
           createdAt: new Date().toISOString(),
         };
+
+        const creditAmount = newTx.toAmount ?? newTx.amount;
 
         set((s) => {
           const accounts = s.accounts.map((acc) => {
@@ -482,7 +605,7 @@ export const useStore = create<WealthState>()(
                 return { ...acc, balance: newBalance, unitBalance };
               }
               if (acc.id === newTx.toAccountId) {
-                const newBalance = acc.balance + newTx.amount;
+                const newBalance = acc.balance + creditAmount;
                 const unitBalance =
                   acc.exchangeRateToBase && acc.exchangeRateToBase > 0
                     ? newBalance / acc.exchangeRateToBase
@@ -500,12 +623,15 @@ export const useStore = create<WealthState>()(
           };
         });
 
-        // Check budget alerts after expense (unless it's an IOU)
-        if (tx.type === "expense" && !tx.isIou) {
-          const { budgets, transactions, settings } = get();
+        // Check budget alerts after expense (unless it's an IOU or reconciliation)
+        if (tx.type === "expense" && !tx.isIou && !tx.isReconciliation) {
+          const { budgets, transactions, accounts, exchangeRates, settings } =
+            get();
           checkBudgetAlerts(
             budgets,
             transactions,
+            accounts,
+            exchangeRates,
             tx.category,
             settings.monthStartsOnDay || 1,
           );
@@ -513,9 +639,30 @@ export const useStore = create<WealthState>()(
       },
 
       updateTransaction: (id, updates) => {
-        const { transactions } = get();
+        const { transactions, accounts: currentAccounts, exchangeRates } = get();
         const oldTx = transactions.find((t) => t.id === id);
         if (!oldTx) return;
+
+        let nextToAmount = updates.toAmount;
+        if (
+          updates.type === "transfer" &&
+          updates.toAccountId &&
+          nextToAmount === undefined
+        ) {
+          const fromAcc = currentAccounts.find((a) => a.id === updates.accountId);
+          const toAcc = currentAccounts.find((a) => a.id === updates.toAccountId);
+          const converted = convertTransferAmount(
+            updates.amount,
+            fromAcc,
+            toAcc,
+            exchangeRates,
+          );
+          if (converted !== updates.amount) {
+            nextToAmount = converted;
+          }
+        }
+        const nextCreditAmount = nextToAmount ?? updates.amount;
+        const oldCreditAmount = oldTx.toAmount ?? oldTx.amount;
 
         set((s) => {
           // Revert old effect
@@ -530,7 +677,7 @@ export const useStore = create<WealthState>()(
               if (acc.id === oldTx.accountId)
                 return { ...acc, balance: acc.balance + oldTx.amount };
               if (acc.id === oldTx.toAccountId)
-                return { ...acc, balance: acc.balance - oldTx.amount };
+                return { ...acc, balance: acc.balance - oldCreditAmount };
             }
             return acc;
           });
@@ -547,24 +694,23 @@ export const useStore = create<WealthState>()(
               if (acc.id === updates.accountId)
                 return { ...acc, balance: acc.balance - updates.amount };
               if (acc.id === updates.toAccountId)
-                return { ...acc, balance: acc.balance + updates.amount };
+                return { ...acc, balance: acc.balance + nextCreditAmount };
             }
             return acc;
           });
 
           // Keep unit balances synced if foreign
-          accounts = accounts.map((acc) => {
-            if (acc.exchangeRateToBase && acc.exchangeRateToBase > 0) {
-              return {
-                ...acc,
-                unitBalance: acc.balance / acc.exchangeRateToBase,
-              };
-            }
-            return acc;
-          });
+          accounts = syncUnitBalances(accounts);
 
           const updatedTransactions = s.transactions.map((t) =>
-            t.id === id ? { ...t, ...updates } : t,
+            t.id === id
+              ? {
+                  ...t,
+                  ...updates,
+                  toAmount:
+                    updates.type === "transfer" ? nextToAmount : undefined,
+                }
+              : t,
           );
 
           return { accounts, transactions: updatedTransactions };
@@ -579,20 +725,46 @@ export const useStore = create<WealthState>()(
         set((s) => ({
           accounts: reverseTransactionEffect(s.accounts, tx),
           transactions: s.transactions.filter((t) => t.id !== id),
-          // Deleting a settlement entry re-opens the IOU it closed
+          // Deleting a settlement entry re-opens / restores the IOU amount
           ious:
             tx.iouId && isSettlementTx(tx)
-              ? s.ious.map((i) =>
-                  i.id === tx.iouId
-                    ? {
-                        ...i,
-                        status: "pending" as const,
-                        settledDate: undefined,
-                      }
-                    : i,
-                )
+              ? s.ious.map((i) => {
+                  if (i.id !== tx.iouId) return i;
+                  const restored =
+                    i.status === "settled"
+                      ? i.originalAmount ?? tx.amount
+                      : Math.min(
+                          i.originalAmount ?? i.amount + tx.amount,
+                          i.amount + tx.amount,
+                        );
+                  return {
+                    ...i,
+                    amount: restored,
+                    status: "pending" as const,
+                    settledDate: undefined,
+                  };
+                })
               : s.ious,
         }));
+      },
+
+      stopRecurringTransaction: (id) => {
+        set((s) => ({
+          transactions: s.transactions.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  isRecurring: false,
+                  recurrenceFrequency: undefined,
+                  recurrenceEndDate: undefined,
+                }
+              : t,
+          ),
+        }));
+        useToastStore.getState().addToast({
+          type: "info",
+          message: "Auto-recurring schedule stopped",
+        });
       },
 
       // Budgets
@@ -677,8 +849,11 @@ export const useStore = create<WealthState>()(
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ recurring: [...s.recurring, newBill] }));
+        const cur = getAccountBalanceCurrency(
+          get().accounts.find((a) => a.id === bill.accountId),
+        );
         if (get().settings.notificationsEnabled !== false) {
-          NotificationService.scheduleBillReminder(newBill).catch(() => {});
+          NotificationService.scheduleBillReminder(newBill, cur).catch(() => {});
         }
         useToastStore.getState().addToast({
           type: "success",
@@ -703,7 +878,10 @@ export const useStore = create<WealthState>()(
         }));
         const updated = get().recurring.find((r) => r.id === id);
         if (updated && get().settings.notificationsEnabled !== false) {
-          NotificationService.scheduleBillReminder(updated).catch(() => {});
+          const cur = getAccountBalanceCurrency(
+            get().accounts.find((a) => a.id === updated.accountId),
+          );
+          NotificationService.scheduleBillReminder(updated, cur).catch(() => {});
         }
         useToastStore.getState().addToast({
           type: "info",
@@ -726,7 +904,13 @@ export const useStore = create<WealthState>()(
           ),
         }));
         if (nextStatus === "active" && get().settings.notificationsEnabled !== false) {
-          NotificationService.scheduleBillReminder({ ...bill, status: "active" }).catch(() => {});
+          const cur = getAccountBalanceCurrency(
+            get().accounts.find((a) => a.id === bill.accountId),
+          );
+          NotificationService.scheduleBillReminder(
+            { ...bill, status: "active" },
+            cur,
+          ).catch(() => {});
         } else {
           NotificationService.cancelBillReminder(bill.id).catch(() => {});
         }
@@ -789,7 +973,12 @@ export const useStore = create<WealthState>()(
 
         const updatedBill = get().recurring.find((r) => r.id === id);
         if (updatedBill && get().settings.notificationsEnabled !== false) {
-          NotificationService.scheduleBillReminder(updatedBill).catch(() => {});
+          const cur = getAccountBalanceCurrency(
+            get().accounts.find((a) => a.id === updatedBill.accountId),
+          );
+          NotificationService.scheduleBillReminder(updatedBill, cur).catch(
+            () => {},
+          );
         }
 
         useToastStore.getState().addToast({
@@ -799,6 +988,100 @@ export const useStore = create<WealthState>()(
             (skipped > 0
               ? ` (skipped ${skipped} missed cycle${skipped > 1 ? "s" : ""})`
               : ""),
+        });
+      },
+
+      // Installments / BNPL Tracker
+      addInstallment: (plan) => {
+        const paid = Math.max(0, Math.min(plan.paidMonths, plan.totalMonths));
+        const newPlan: Installment = {
+          ...plan,
+          paidMonths: paid,
+          status: paid >= plan.totalMonths ? "completed" : "active",
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ installments: [newPlan, ...s.installments] }));
+        useToastStore.getState().addToast({
+          type: "success",
+          message: `Installment plan "${plan.name}" added`,
+        });
+      },
+
+      updateInstallment: (id, updates) => {
+        set((s) => ({
+          installments: s.installments.map((inst) => {
+            if (inst.id !== id) return inst;
+            const merged = { ...inst, ...updates };
+            const clampedPaid = Math.max(
+              0,
+              Math.min(merged.paidMonths, merged.totalMonths),
+            );
+            return {
+              ...merged,
+              paidMonths: clampedPaid,
+              status:
+                clampedPaid >= merged.totalMonths ? "completed" : "active",
+            };
+          }),
+        }));
+      },
+
+      deleteInstallment: (id) => {
+        set((s) => ({
+          installments: s.installments.filter((inst) => inst.id !== id),
+        }));
+        useToastStore.getState().addToast({
+          type: "info",
+          message: "Installment plan removed",
+        });
+      },
+
+      payInstallment: (id, customDate) => {
+        const inst = get().installments.find((i) => i.id === id);
+        if (!inst || inst.status === "completed") return;
+
+        const today = todayISO();
+        const date = customDate || today;
+        const nextPaid = inst.paidMonths + 1;
+        const isDone = nextPaid >= inst.totalMonths;
+
+        get().addTransaction({
+          type: "expense",
+          amount: inst.monthlyAmount,
+          category: inst.category || "Debt & Loan Payments",
+          note: `Installment (${nextPaid}/${inst.totalMonths}): ${inst.name}${inst.provider ? ` · ${inst.provider}` : ""}`,
+          date,
+          accountId: inst.accountId,
+        });
+
+        const anchorDay =
+          inst.anchorDay ?? parseLocalDate(inst.nextDueDate).getDate();
+        const nextDate = nextRecurrenceDate(
+          inst.nextDueDate,
+          "monthly",
+          anchorDay,
+        );
+
+        set((s) => ({
+          installments: s.installments.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  paidMonths: nextPaid,
+                  nextDueDate: nextDate,
+                  anchorDay,
+                  status: isDone ? "completed" : "active",
+                }
+              : item,
+          ),
+        }));
+
+        useToastStore.getState().addToast({
+          type: "success",
+          message: isDone
+            ? `🎉 Final installment paid for "${inst.name}"! Plan completed.`
+            : `Paid installment ${nextPaid}/${inst.totalMonths} for "${inst.name}"`,
         });
       },
 
@@ -868,31 +1151,51 @@ export const useStore = create<WealthState>()(
         }
       },
 
-      settleIou: (id, targetAccountId) => {
+      settleIou: (id, targetAccountId, partialAmount) => {
         const iou = get().ious.find((i) => i.id === id);
         if (!iou || iou.status === "settled") return;
 
         const settleAccountId = targetAccountId || iou.accountId;
         const today = todayISO();
-        const cur =
-          get().accounts.find((a) => a.id === settleAccountId)?.currency ??
-          "EGP";
+        const cur = getAccountBalanceCurrency(
+          get().accounts.find((a) => a.id === settleAccountId),
+        );
 
-        // Mark settled
+        const payAmount =
+          partialAmount !== undefined && partialAmount > 0
+            ? Math.min(partialAmount, iou.amount)
+            : iou.amount;
+
+        if (!(payAmount > 0)) return;
+
+        const remaining = Math.max(
+          0,
+          Math.round((iou.amount - payAmount) * 100) / 100,
+        );
+        const isFull = remaining < 0.01;
+
         set((s) => ({
-          ious: s.ious.map((i) =>
-            i.id === id ? { ...i, status: "settled", settledDate: today } : i,
-          ),
+          ious: s.ious.map((i) => {
+            if (i.id !== id) return i;
+            return {
+              ...i,
+              originalAmount: i.originalAmount ?? i.amount,
+              amount: isFull ? i.originalAmount ?? i.amount : remaining,
+              status: isFull ? "settled" : "pending",
+              settledDate: isFull ? today : undefined,
+            };
+          }),
         }));
 
         // Return money / pay back
         if (iou.type === "lent") {
-          // Returning money to user's account
           get().addTransaction({
             type: "income",
-            amount: iou.amount,
+            amount: payAmount,
             category: "Settlement / سداد دين",
-            note: `Settlement from ${iou.personName} / استرداد سلفة`,
+            note: isFull
+              ? `Settlement from ${iou.personName} / استرداد سلفة`
+              : `Partial settlement from ${iou.personName} (${remaining.toLocaleString()} left)`,
             date: today,
             accountId: settleAccountId,
             isIou: true,
@@ -900,15 +1203,18 @@ export const useStore = create<WealthState>()(
           });
           useToastStore.getState().addToast({
             type: "success",
-            message: `Settled! Received ${iou.amount.toLocaleString()} ${cur} back from ${iou.personName}`,
+            message: isFull
+              ? `Settled! Received ${payAmount.toLocaleString()} ${cur} back from ${iou.personName}`
+              : `Partial payment received (${payAmount.toLocaleString()} ${cur}). Remaining: ${remaining.toLocaleString()} ${cur}`,
           });
         } else {
-          // User repaying borrowed debt
           get().addTransaction({
             type: "expense",
-            amount: iou.amount,
+            amount: payAmount,
             category: "Settlement / سداد دين",
-            note: `Repaid debt to ${iou.personName} / سداد دين`,
+            note: isFull
+              ? `Repaid debt to ${iou.personName} / سداد دين`
+              : `Partial repayment to ${iou.personName} (${remaining.toLocaleString()} left)`,
             date: today,
             accountId: settleAccountId,
             isIou: true,
@@ -916,7 +1222,9 @@ export const useStore = create<WealthState>()(
           });
           useToastStore.getState().addToast({
             type: "success",
-            message: `Settled! Repaid ${iou.amount.toLocaleString()} ${cur} to ${iou.personName}`,
+            message: isFull
+              ? `Settled! Repaid ${payAmount.toLocaleString()} ${cur} to ${iou.personName}`
+              : `Partial payment made (${payAmount.toLocaleString()} ${cur}). Remaining: ${remaining.toLocaleString()} ${cur}`,
           });
         }
       },
@@ -954,7 +1262,11 @@ export const useStore = create<WealthState>()(
             return acc;
           });
 
-          return { exchangeRates: newRates, accounts: updatedAccounts };
+          return {
+            exchangeRates: newRates,
+            ratesUpdatedAt: new Date().toISOString(),
+            accounts: updatedAccounts,
+          };
         });
 
         useToastStore.getState().addToast({
@@ -969,32 +1281,52 @@ export const useStore = create<WealthState>()(
       },
 
       getSafeToSpend: () => {
-        const { transactions, recurring, monthlyBudgetTarget, settings } =
-          get();
+        const {
+          transactions,
+          recurring,
+          installments,
+          accounts,
+          exchangeRates,
+          monthlyBudgetTarget,
+          settings,
+        } = get();
         const now = new Date();
         const cycle = getFinancialCycle(now, settings.monthStartsOnDay || 1);
         const todayStr = todayISO();
+        const accMap = new Map(accounts.map((a) => [a.id, a]));
 
-        // 1. Cycle-to-date variable expenses (excluding transfers & lent IOUs)
+        // 1. Cycle-to-date variable expenses in base currency (excluding transfers, IOUs & reconciliations)
         const monthToDateExpenses = transactions
           .filter(
             (tx) =>
               tx.type === "expense" &&
               cycle.isDateInCycle(tx.date) &&
-              !tx.isIou,
+              !tx.isIou &&
+              !tx.isReconciliation,
           )
-          .reduce((sum, tx) => sum + tx.amount, 0);
+          .reduce(
+            (sum, tx) =>
+              sum + amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates),
+            0,
+          );
 
-        // 2. Cycle-to-date income
+        // 2. Cycle-to-date income in base currency
         const monthToDateIncome = transactions
           .filter(
             (tx) =>
-              tx.type === "income" && cycle.isDateInCycle(tx.date) && !tx.isIou,
+              tx.type === "income" &&
+              cycle.isDateInCycle(tx.date) &&
+              !tx.isIou &&
+              !tx.isReconciliation,
           )
-          .reduce((sum, tx) => sum + tx.amount, 0);
+          .reduce(
+            (sum, tx) =>
+              sum + amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates),
+            0,
+          );
 
-        // 3. Fixed Upcoming Bills due between today and end of current cycle
-        const fixedUpcomingBills = recurring
+        // 3. Fixed Upcoming Bills + Active Installments due between today and end of current cycle
+        const upcomingRecurringBills = recurring
           .filter(
             (r) =>
               r.type === "expense" &&
@@ -1002,7 +1334,31 @@ export const useStore = create<WealthState>()(
               r.nextDueDate >= todayStr &&
               r.nextDueDate <= cycle.endDate,
           )
-          .reduce((sum, r) => sum + r.amount, 0);
+          .reduce(
+            (sum, r) =>
+              sum + amountInBase(r.amount, accMap.get(r.accountId), exchangeRates),
+            0,
+          );
+
+        const upcomingInstallments = (installments ?? [])
+          .filter(
+            (inst) =>
+              inst.status === "active" &&
+              inst.nextDueDate >= todayStr &&
+              inst.nextDueDate <= cycle.endDate,
+          )
+          .reduce(
+            (sum, inst) =>
+              sum +
+              amountInBase(
+                inst.monthlyAmount,
+                accMap.get(inst.accountId),
+                exchangeRates,
+              ),
+            0,
+          );
+
+        const fixedUpcomingBills = upcomingRecurringBills + upcomingInstallments;
 
         // Formula: (Monthly Target Budget OR Income - Fixed Upcoming Bills - Cycle Variable Expenses) / Remaining Days
         const monthlyBase =
@@ -1065,9 +1421,17 @@ export const useStore = create<WealthState>()(
 
       // Net Worth Breakdown
       getNetWorthBreakdown: () => {
-        const { accounts, budgets, ious, exchangeRates } = get();
+        const {
+          accounts,
+          budgets,
+          transactions,
+          ious,
+          exchangeRates,
+          settings,
+        } = get();
+        const accMap = new Map(accounts.map((a) => [a.id, a]));
 
-        // 1. Liquid Cash (Bank, Wallet, Card non-savings, standard currency)
+        // 1. Liquid Cash vs Hard Assets
         let liquidCash = 0;
         let hardAssets = 0;
 
@@ -1087,20 +1451,48 @@ export const useStore = create<WealthState>()(
           }
         }
 
-        // 2. Receivables: Pending Lent IOUs (money owed to user)
+        // 2. Receivables: Pending Lent IOUs converted to base currency
         const receivables = ious
           .filter((i) => i.status === "pending" && i.type === "lent")
-          .reduce((sum, i) => sum + i.amount, 0);
+          .reduce(
+            (sum, i) =>
+              sum + amountInBase(i.amount, accMap.get(i.accountId), exchangeRates),
+            0,
+          );
 
-        // 3. Payables: Pending Borrowed IOUs (money user owes)
+        // 3. Payables: Pending Borrowed IOUs converted to base currency
         const payables = ious
           .filter((i) => i.status === "pending" && i.type === "borrowed")
-          .reduce((sum, i) => sum + i.amount, 0);
+          .reduce(
+            (sum, i) =>
+              sum + amountInBase(i.amount, accMap.get(i.accountId), exchangeRates),
+            0,
+          );
 
-        // 4. Committed Budgets
+        // 4. Committed Budgets: deduct ONLY remaining unspent portion in current cycle
+        // (money already spent has already reduced account balances!)
+        const cycle = getFinancialCycle(new Date(), settings.monthStartsOnDay || 1);
+        const spentByCategory: Record<string, number> = {};
+        for (const tx of transactions) {
+          if (
+            tx.type === "expense" &&
+            !tx.isIou &&
+            !tx.isReconciliation &&
+            cycle.isDateInCycle(tx.date)
+          ) {
+            spentByCategory[tx.category] =
+              (spentByCategory[tx.category] ?? 0) +
+              amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates);
+          }
+        }
+
         const committedBudgets = budgets
           .filter((b) => b.deductFromNetWorth)
-          .reduce((sum, b) => sum + b.limit, 0);
+          .reduce((sum, b) => {
+            const spent = spentByCategory[b.category] ?? 0;
+            const remaining = Math.max(0, b.limit - spent);
+            return sum + remaining;
+          }, 0);
 
         const totalNetWorth =
           liquidCash + hardAssets + receivables - payables - committedBudgets;
@@ -1123,14 +1515,8 @@ export const useStore = create<WealthState>()(
         const byCurrency: Record<string, number> = {};
         for (const acc of get().accounts) {
           if (acc.type === "savings") continue;
-          byCurrency[acc.currency] =
-            (byCurrency[acc.currency] ?? 0) + acc.balance;
-        }
-        for (const b of get().budgets) {
-          if (b.deductFromNetWorth && b.limit > 0) {
-            const cur = b.currency || get().accounts[0]?.currency || "EGP";
-            byCurrency[cur] = (byCurrency[cur] ?? 0) - b.limit;
-          }
+          const cur = getAccountBalanceCurrency(acc);
+          byCurrency[cur] = (byCurrency[cur] ?? 0) + acc.balance;
         }
         return byCurrency;
       },
@@ -1152,7 +1538,7 @@ export const useStore = create<WealthState>()(
             else if (tx.type === "transfer") net -= tx.amount;
           }
           if (tx.type === "transfer" && tx.toAccountId === accountId) {
-            net += tx.amount;
+            net += tx.toAmount ?? tx.amount;
           }
         }
         return net;
@@ -1166,6 +1552,8 @@ export const useStore = create<WealthState>()(
           savingsGoals: data.savingsGoals ?? [],
           recurring: data.recurring ?? [],
           ious: data.ious ?? [],
+          installments: data.installments ?? [],
+          customCategories: data.customCategories ?? [],
           exchangeRates: {
             ...DEFAULT_EXCHANGE_RATES,
             ...(data.exchangeRates ?? {}),
@@ -1174,6 +1562,7 @@ export const useStore = create<WealthState>()(
           monthlyBudgetTarget: data.monthlyBudgetTarget ?? 0,
           lastBackupDate: data.lastBackupDate ?? new Date().toISOString(),
           transactionsSinceLastBackup: 0,
+          isDemoData: false,
         });
       },
 
@@ -1185,9 +1574,12 @@ export const useStore = create<WealthState>()(
           savingsGoals: [],
           recurring: [],
           ious: [],
+          installments: [],
+          customCategories: [],
           monthlyBudgetTarget: 0,
           lastBackupDate: null,
           transactionsSinceLastBackup: 0,
+          isDemoData: false,
         });
       },
 
@@ -1223,6 +1615,7 @@ export const useStore = create<WealthState>()(
             get().addTransaction({
               type: template.type,
               amount: template.amount,
+              toAmount: template.toAmount,
               category: template.category,
               note: template.note,
               date: nextDate,
@@ -1236,17 +1629,22 @@ export const useStore = create<WealthState>()(
     }),
     {
       name: "walleteer-wealth-data",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => safeStorage),
       migrate: (persistedState: unknown, version: number) => {
         if (!persistedState || typeof persistedState !== "object") {
           return persistedState;
         }
         const state = persistedState as Record<string, unknown>;
+        const existingSettings =
+          (state.settings as Record<string, unknown>) ?? {};
         const migrated: Record<string, unknown> = {
           ...state,
           recurring: state.recurring || INITIAL_RECURRING,
           ious: state.ious || INITIAL_IOUS,
+          installments: state.installments || [],
+          customCategories: state.customCategories || [],
+          ratesUpdatedAt: state.ratesUpdatedAt ?? null,
           exchangeRates: {
             ...DEFAULT_EXCHANGE_RATES,
             ...((state.exchangeRates as Record<string, number>) || {}),
@@ -1254,13 +1652,17 @@ export const useStore = create<WealthState>()(
           monthlyBudgetTarget: state.monthlyBudgetTarget ?? 0,
           lastBackupDate: state.lastBackupDate ?? null,
           transactionsSinceLastBackup: state.transactionsSinceLastBackup ?? 0,
+          isDemoData: state.isDemoData ?? false,
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...existingSettings,
+          },
         };
-        // v2 → v3: migrate date format default (was never applied) + hardcode currency
+        // v2 → v3: migrate date format default + defaultCurrency
         if (version < 3) {
-          const settings = (migrated.settings as Record<string, unknown>) ?? {};
           migrated.settings = {
             ...DEFAULT_SETTINGS,
-            ...settings,
+            ...existingSettings,
             dateFormat: "MMM D, YYYY",
             defaultCurrency: "EGP",
           };

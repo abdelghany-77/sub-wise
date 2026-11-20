@@ -122,10 +122,12 @@ export function InsightsStrip({ insights, onNavigate }: Props) {
           const style = SEVERITY_STYLES[insight.severity];
           const IconComp = ICON_MAP[insight.icon] ?? AlertCircle;
           return (
-            <div
+            <button
+              type="button"
               key={insight.id}
+              onClick={() => onNavigate(insight.targetPage ?? "reports")}
               className={cn(
-                "snap-start flex-shrink-0 w-[280px] md:w-auto rounded-xl border p-3 flex items-start gap-3 transition-colors",
+                "snap-start flex-shrink-0 w-[260px] xs:w-[280px] md:w-auto rounded-xl border p-3 flex items-start gap-3 text-start transition-all hover:brightness-110 active:scale-[0.98] cursor-pointer group",
                 style.border,
                 style.bg,
               )}
@@ -140,19 +142,28 @@ export function InsightsStrip({ insights, onNavigate }: Props) {
                 <IconComp size={15} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", style.dot)}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                        style.dot,
+                      )}
+                    />
+                    <p className="text-xs font-semibold text-white truncate">
+                      {insight.title}
+                    </p>
+                  </div>
+                  <ChevronRight
+                    size={13}
+                    className="text-white/25 group-hover:text-white/60 flex-shrink-0 transition-transform group-hover:translate-x-0.5"
                   />
-                  <p className="text-xs font-semibold text-white truncate">
-                    {insight.title}
-                  </p>
                 </div>
                 <p className="text-[11px] text-white/45 leading-snug mt-0.5 line-clamp-2">
                   {insight.body}
                 </p>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

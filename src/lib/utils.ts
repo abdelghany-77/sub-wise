@@ -93,7 +93,7 @@ export function generateId(): string {
 }
 
 export function getMonthKey(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -148,6 +148,41 @@ export function nextRecurrenceDate(
 }
 
 /**
+ * Returns the currency in which an account's numeric `balance` field is stored.
+ * Foreign-currency and gold vaults store `balance` in base currency (EGP), while
+ * standard accounts store `balance` in their own `currency`.
+ */
+export function getAccountBalanceCurrency(
+  acc:
+    | { currency: string; assetType?: string; exchangeRateToBase?: number }
+    | undefined,
+  base = "EGP",
+): string {
+  if (!acc) return base;
+  if (acc.assetType && acc.assetType !== "standard" && acc.exchangeRateToBase) {
+    return base;
+  }
+  return acc.currency || base;
+}
+
+export function getCurrencySymbol(currency: string): string {
+  switch (currency) {
+    case "USD":
+      return "$";
+    case "EUR":
+      return "€";
+    case "GBP":
+      return "£";
+    case "SAR":
+      return "SAR";
+    case "AED":
+      return "AED";
+    default:
+      return currency || "EGP";
+  }
+}
+
+/**
  * Balance of an account expressed in the base currency (EGP). Foreign-currency
  * and gold vaults already store their balance in base; plain accounts held in
  * another currency are converted with the stored exchange rates.
@@ -180,6 +215,99 @@ export function accountBalanceInBase(
     return acc.balance * rates[acc.currency];
   }
   return acc.balance;
+}
+
+/**
+ * Converts an amount from `fromAcc`'s balance currency into `toAcc`'s balance currency.
+ */
+export function convertTransferAmount(
+  amount: number,
+  fromAcc:
+    | { currency: string; assetType?: string; exchangeRateToBase?: number }
+    | undefined,
+  toAcc:
+    | { currency: string; assetType?: string; exchangeRateToBase?: number }
+    | undefined,
+  rates: Record<string, number>,
+  base = "EGP",
+): number {
+  const fromCur = getAccountBalanceCurrency(fromAcc, base);
+  const toCur = getAccountBalanceCurrency(toAcc, base);
+  if (fromCur === toCur) return amount;
+
+  const inBase = amountInBase(amount, fromAcc, rates, base);
+  if (toCur === base) return Math.round(inBase * 100) / 100;
+  const toRate = rates[toCur];
+  if (toRate && toRate > 0) {
+    return Math.round((inBase / toRate) * 100) / 100;
+  }
+  return amount;
+}
+
+/** Hashes a 4-digit PIN using SHA-256 (with safe deterministic fallback if subtle crypto is unavailable). */
+export async function hashPin(pin: string): Promise<string> {
+  const salted = `walleteer-pin-v1:${pin}`;
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    try {
+      const data = new TextEncoder().encode(salted);
+      const buf = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    } catch {
+      // Fall through to deterministic fallback
+    }
+  }
+  let h = 2166136261;
+  for (let i = 0; i < salted.length; i++) {
+    h ^= salted.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `fnv-${(h >>> 0).toString(16)}`;
+}
+
+/**
+ * Exports text content cleanly on both desktop browsers and mobile/Capacitor WebViews.
+ * Prefers Web Share API with file attachment on touch devices when available, falling back to anchor download.
+ */
+export async function shareOrDownloadFile(
+  content: string,
+  filename: string,
+  mimeType: string,
+): Promise<"shared" | "downloaded"> {
+  const blob = new Blob([content], { type: mimeType });
+
+  const isMobile =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isMobile && typeof navigator !== "undefined" && "share" in navigator) {
+    try {
+      const file = new File([blob], filename, { type: mimeType });
+      if (
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({ files: [file], title: filename });
+        return "shared";
+      }
+    } catch (err) {
+      // If user dismissed share sheet, do not force download; otherwise fall back
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return "shared";
+      }
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return "downloaded";
 }
 
 export interface FinancialCycle {

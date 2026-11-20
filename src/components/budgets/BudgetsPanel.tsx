@@ -13,7 +13,12 @@ import { Card } from "../ui/Card";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input, Select } from "../ui/FormFields";
-import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
+import {
+  amountInBase,
+  formatCurrency,
+  getFinancialCycle,
+  cn,
+} from "../../lib/utils";
 import { EXPENSE_CATEGORIES, CATEGORY_COLORS } from "../../types";
 import type { Budget } from "../../types";
 
@@ -113,6 +118,9 @@ export function BudgetsPanel() {
   const {
     budgets,
     transactions,
+    accounts,
+    customCategories,
+    exchangeRates,
     addBudget,
     updateBudget,
     deleteBudget,
@@ -131,6 +139,13 @@ export function BudgetsPanel() {
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
+  const expenseCategoryOptions = useMemo(() => {
+    const customNames = customCategories
+      .filter((c) => c.type === "expense")
+      .map((c) => c.name);
+    return Array.from(new Set([...EXPENSE_CATEGORIES, ...customNames]));
+  }, [customCategories]);
+
   const cycle = useMemo(
     () => getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1),
     [settings.monthStartsOnDay],
@@ -139,12 +154,20 @@ export function BudgetsPanel() {
   const monthlySpending = useMemo(() => {
     const map: Record<string, number> = {};
     transactions
-      .filter((tx) => tx.type === "expense" && cycle.isDateInCycle(tx.date))
+      .filter(
+        (tx) =>
+          tx.type === "expense" &&
+          !tx.isIou &&
+          !tx.isReconciliation &&
+          cycle.isDateInCycle(tx.date),
+      )
       .forEach((tx) => {
-        map[tx.category] = (map[tx.category] ?? 0) + tx.amount;
+        const acc = accounts.find((a) => a.id === tx.accountId);
+        const amt = amountInBase(tx.amount, acc, exchangeRates);
+        map[tx.category] = (map[tx.category] ?? 0) + amt;
       });
     return map;
-  }, [transactions, cycle]);
+  }, [transactions, accounts, exchangeRates, cycle]);
 
   const rows = useMemo(() => {
     const list = budgets.map((b) => {
@@ -228,7 +251,7 @@ export function BudgetsPanel() {
 
   const totalDeductedFromNetWorth = summaryRows
     .filter((r) => r.budget.deductFromNetWorth)
-    .reduce((s, r) => s + r.budget.limit, 0);
+    .reduce((s, r) => s + Math.max(0, r.budget.limit - r.spent), 0);
 
   const blur = privacyMode && "privacy-blur";
 
@@ -397,7 +420,11 @@ export function BudgetsPanel() {
             {rows.map(({ budget: b, spent, pct, remaining }) => {
               const tone = getTone(pct);
               const isOver = spent > b.limit;
-              const catColor = CATEGORY_COLORS[b.category] ?? "#94a3b8";
+              const customColor = customCategories.find(
+                (c) => c.name === b.category,
+              )?.color;
+              const catColor =
+                customColor ?? CATEGORY_COLORS[b.category] ?? "#94a3b8";
               const perDay =
                 !isOver && remaining > 0
                   ? remaining / Math.max(1, cycle.remainingDays)
@@ -463,12 +490,12 @@ export function BudgetsPanel() {
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-center flex-shrink-0 gap-0.5">
                     <button
                       type="button"
                       aria-label={`Edit ${b.category} budget`}
                       onClick={() => openEdit(b)}
-                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-blue-400 hover:bg-blue-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:group-hover:text-white/50 transition-all"
+                      className="h-10 w-10 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-blue-400 hover:bg-blue-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Pencil size={14} />
                     </button>
@@ -476,7 +503,7 @@ export function BudgetsPanel() {
                       type="button"
                       aria-label={`Delete ${b.category} budget`}
                       onClick={() => setConfirmDelete(b.id)}
-                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-rose-400 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 sm:group-hover:text-white/50 transition-all"
+                      className="h-10 w-10 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-rose-400 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -515,7 +542,7 @@ export function BudgetsPanel() {
             onChange={(e) => setForm({ ...form, category: e.target.value })}
             options={[
               { value: "", label: "— Select category —" },
-              ...EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c })),
+              ...expenseCategoryOptions.map((c) => ({ value: c, label: c })),
             ]}
             error={errors.category}
           />

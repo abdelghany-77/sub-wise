@@ -14,6 +14,7 @@ import {
   Repeat,
   Scale,
   FilterX,
+  StopCircle,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
@@ -21,7 +22,13 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Input, Select } from "../ui/FormFields";
-import { formatCurrency, parseLocalDate, cn } from "../../lib/utils";
+import {
+  amountInBase,
+  formatCurrency,
+  getAccountBalanceCurrency,
+  parseLocalDate,
+  cn,
+} from "../../lib/utils";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "../../types";
 import type { RecurringBill } from "../../types";
 
@@ -127,13 +134,16 @@ function getDueInfo(dueDate: string, status: BillStatus, today: Date): DueInfo {
 export function SubscriptionsPanel() {
   const {
     recurring,
+    transactions,
     accounts,
+    customCategories,
     exchangeRates,
     addRecurringBill,
     updateRecurring,
     toggleRecurringStatus,
     deleteRecurringBill,
     markBillAsPaid,
+    stopRecurringTransaction,
     privacyMode,
   } = useStore();
 
@@ -232,15 +242,16 @@ export function SubscriptionsPanel() {
   const today = startOfToday();
   const todayKey = today.getTime();
 
-  const rateFor = (accId: string) => {
-    const currency = accounts.find((a) => a.id === accId)?.currency;
-    if (!currency || currency === "EGP") return 1;
-    return exchangeRates[currency] ?? 1;
-  };
+  const recurringTxTemplates = useMemo(
+    () => transactions.filter((tx) => tx.isRecurring),
+    [transactions],
+  );
 
-  const monthlyEgp = (bill: RecurringBill) =>
-    (bill.frequency === "monthly" ? bill.amount : bill.amount / 12) *
-    rateFor(bill.accountId);
+  const monthlyEgp = (bill: RecurringBill) => {
+    const acc = accounts.find((a) => a.id === bill.accountId);
+    const baseAmt = amountInBase(bill.amount, acc, exchangeRates);
+    return bill.frequency === "monthly" ? baseAmt : baseAmt / 12;
+  };
 
   const stats = useMemo(() => {
     const t = new Date(todayKey);
@@ -256,10 +267,10 @@ export function SubscriptionsPanel() {
     const overdue = dueSoon.filter(
       (r) => getDueInfo(r.nextDueDate, "active", t).days < 0,
     );
-    const dueSoonTotal = dueSoon.reduce(
-      (s, r) => s + r.amount * rateFor(r.accountId),
-      0,
-    );
+    const dueSoonTotal = dueSoon.reduce((s, r) => {
+      const acc = accounts.find((a) => a.id === r.accountId);
+      return s + amountInBase(r.amount, acc, exchangeRates);
+    }, 0);
 
     return {
       outflow,
@@ -303,9 +314,15 @@ export function SubscriptionsPanel() {
   };
 
   const netPositive = stats.net >= 0;
-  const categoryOptions = (
-    type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES
-  ) as readonly string[];
+  const customTypeCats = customCategories
+    .filter((c) => c.type === type)
+    .map((c) => c.name);
+  const categoryOptions = Array.from(
+    new Set([
+      ...(type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES),
+      ...customTypeCats,
+    ]),
+  );
   const categoryList = categoryOptions.includes(category)
     ? categoryOptions
     : [category, ...categoryOptions];
@@ -545,7 +562,7 @@ export function SubscriptionsPanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
           {filteredBills.map((bill) => {
             const account = accounts.find((a) => a.id === bill.accountId);
-            const currency = account?.currency || "EGP";
+            const currency = getAccountBalanceCurrency(account);
             const billStatus: BillStatus = bill.status ?? "active";
             const isPaused = billStatus === "paused";
             const isIncome = bill.type === "income";
@@ -732,6 +749,75 @@ export function SubscriptionsPanel() {
         </div>
       )}
 
+      {/* Auto-Recurring Transaction Templates */}
+      {recurringTxTemplates.length > 0 && (
+        <Card padding="sm" className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center flex-shrink-0">
+                <Repeat size={14} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs sm:text-sm font-semibold text-white truncate">
+                  Auto-Recurring Transactions ({recurringTxTemplates.length})
+                </h3>
+                <p className="text-[11px] text-white/45 truncate">
+                  Transactions set to auto-log periodically
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-white/[0.06]">
+            {recurringTxTemplates.map((tx) => {
+              const acc = accounts.find((a) => a.id === tx.accountId);
+              const cur = getAccountBalanceCurrency(acc);
+              return (
+                <div
+                  key={tx.id}
+                  className="py-2.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-semibold text-white truncate">
+                      {tx.note || tx.category}
+                    </p>
+                    <p className="text-[11px] text-white/45 truncate">
+                      <span className="capitalize">
+                        {tx.recurrenceFrequency ?? "monthly"}
+                      </span>
+                      {" · "}
+                      {acc?.name ?? "Account"}
+                      {tx.recurrenceEndDate ? ` · until ${tx.recurrenceEndDate}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className={cn(
+                        "text-xs sm:text-sm font-bold font-mono tabular-nums",
+                        tx.type === "income" ? "text-emerald-400" : "text-white",
+                        blur,
+                      )}
+                    >
+                      {tx.type === "income" ? "+" : "-"}
+                      {formatCurrency(tx.amount, cur)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => stopRecurringTransaction(tx.id)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 transition-colors"
+                      title="Stop auto-repeating this transaction"
+                    >
+                      <StopCircle size={13} />
+                      <span>Stop</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <ConfirmDialog
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
@@ -835,7 +921,7 @@ export function SubscriptionsPanel() {
                 onChange={(e) => setAccountId(e.target.value)}
                 options={accounts.map((a) => ({
                   value: a.id,
-                  label: `${a.name} (${a.currency})`,
+                  label: `${a.name} (${getAccountBalanceCurrency(a)})`,
                 }))}
               />
             </div>

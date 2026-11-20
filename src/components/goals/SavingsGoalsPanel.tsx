@@ -317,7 +317,7 @@ export function SavingsGoalsPanel() {
 
       {savingsGoals.length > 0 && (
         <Card padding="sm" className="space-y-2.5 !p-3 sm:!p-3.5">
-          <div className="grid grid-cols-3 gap-x-4">
+          <div className="grid grid-cols-3 gap-x-2 sm:gap-x-4">
             <div className="min-w-0">
               <p className="text-[11px] text-white/40 flex items-center gap-1">
                 <Banknote size={12} className="text-emerald-400" /> Saved
@@ -459,12 +459,12 @@ export function SavingsGoalsPanel() {
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-center flex-shrink-0 gap-0.5">
                     <button
                       type="button"
                       aria-label={`Edit ${g.name}`}
                       onClick={() => openEdit(g)}
-                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-blue-400 hover:bg-blue-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:group-hover:text-white/50 transition-all"
+                      className="h-10 w-10 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-blue-400 hover:bg-blue-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Pencil size={14} />
                     </button>
@@ -472,7 +472,7 @@ export function SavingsGoalsPanel() {
                       type="button"
                       aria-label={`Delete ${g.name}`}
                       onClick={() => setConfirmDelete(g.id)}
-                      className="h-9 w-9 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-rose-400 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 sm:group-hover:text-white/50 transition-all"
+                      className="h-10 w-10 sm:h-8 sm:w-8 inline-flex items-center justify-center rounded-lg text-white/40 sm:text-white/30 hover:text-rose-400 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 sm:group-hover:text-white/50 transition-all"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -511,7 +511,7 @@ export function SavingsGoalsPanel() {
                       </span>
                     )}
                     {!isComplete && days !== null && days < 0 && (
-                      <span className="text-white/40">
+                      <span className={cn("text-white/40", blur)}>
                         {formatCurrency(remaining, g.currency)} still needed
                       </span>
                     )}

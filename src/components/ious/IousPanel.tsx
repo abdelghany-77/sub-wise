@@ -5,6 +5,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
+  Pencil,
   Trash2,
   CalendarClock,
   CreditCard,
@@ -17,8 +18,10 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 
 import {
+  amountInBase,
   formatCurrency,
   formatDate,
+  getAccountBalanceCurrency,
   parseLocalDate,
   cn,
 } from "../../lib/utils";
@@ -107,15 +110,17 @@ function roundMoney(n: number): number {
 
 function MoneyValue({
   value,
+  currency = "EGP",
   className,
 }: {
   value: number;
+  currency?: string;
   className?: string;
 }) {
   return (
     <span className={className}>
       <span className="text-[9px] sm:text-[10px] font-medium text-white/40 mr-1">
-        EGP
+        {currency}
       </span>
       {formatCurrency(value, "").trim()}
     </span>
@@ -175,10 +180,19 @@ function Kpi({
 }
 
 export function IousPanel() {
-  const { ious, accounts, addIou, deleteIou, settleIou, privacyMode } =
-    useStore();
+  const {
+    ious,
+    accounts,
+    exchangeRates,
+    addIou,
+    updateIou,
+    deleteIou,
+    settleIou,
+    privacyMode,
+  } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingIou, setEditingIou] = useState<Iou | null>(null);
   const [filterType, setFilterType] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [personFilter, setPersonFilter] = useState<string | null>(null);
@@ -193,6 +207,7 @@ export function IousPanel() {
 
   const [settlingIouId, setSettlingIouId] = useState<string | null>(null);
   const [settleAccountId, setSettleAccountId] = useState(accounts[0]?.id || "");
+  const [settleAmountInput, setSettleAmountInput] = useState("");
   const [deletingIouId, setDeletingIouId] = useState<string | null>(null);
 
   const hasAccount = (id: string) => accounts.some((a) => a.id === id);
@@ -210,29 +225,63 @@ export function IousPanel() {
     ? ious.find((i) => i.id === deletingIouId)
     : undefined;
 
-  const handleAddIou = (e: FormEvent) => {
+  const openAdd = () => {
+    setEditingIou(null);
+    setPersonName("");
+    setAmount("");
+    setType("lent");
+    setAccountId(accounts[0]?.id || "");
+    setDueDate("");
+    setNote("");
+    setDeductFromAccount(true);
+    setShowAddModal(true);
+  };
+
+  const openEdit = (iou: Iou) => {
+    setEditingIou(iou);
+    setPersonName(iou.personName);
+    setAmount(String(iou.amount));
+    setType(iou.type);
+    setAccountId(iou.accountId);
+    setDueDate(iou.dueDate ?? "");
+    setNote(iou.note ?? "");
+    setShowAddModal(true);
+  };
+
+  const handleSaveIou = (e: FormEvent) => {
     e.preventDefault();
     const name = personName.trim();
     const parsedAmount = parseFloat(amount);
     if (!name || isNaN(parsedAmount) || parsedAmount <= 0 || !formAccountId)
       return;
 
-    addIou(
-      {
+    if (editingIou) {
+      updateIou(editingIou.id, {
         personName: name,
         amount: parsedAmount,
         type,
         accountId: formAccountId,
         dueDate: dueDate || undefined,
         note: note.trim() || undefined,
-      },
-      deductFromAccount,
-    );
+      });
+    } else {
+      addIou(
+        {
+          personName: name,
+          amount: parsedAmount,
+          type,
+          accountId: formAccountId,
+          dueDate: dueDate || undefined,
+          note: note.trim() || undefined,
+        },
+        deductFromAccount,
+      );
+      if (filterType !== "all" && filterType !== type) setFilterType("all");
+      if (statusFilter === "settled") setStatusFilter("pending");
+      setPersonFilter(null);
+    }
 
-    if (filterType !== "all" && filterType !== type) setFilterType("all");
-    if (statusFilter === "settled") setStatusFilter("pending");
-    setPersonFilter(null);
-
+    setEditingIou(null);
     setPersonName("");
     setAmount("");
     setNote("");
@@ -240,15 +289,28 @@ export function IousPanel() {
     setShowAddModal(false);
   };
 
+  const parsedSettleAmount = parseFloat(settleAmountInput);
+  const settleAmountValid =
+    !!settlingIou &&
+    !isNaN(parsedSettleAmount) &&
+    parsedSettleAmount > 0 &&
+    parsedSettleAmount <= settlingIou.amount + 0.001;
+
   const handleSettleSubmit = () => {
-    if (!settlingIou || !resolvedSettleAccountId) return;
-    settleIou(settlingIou.id, resolvedSettleAccountId);
+    if (!settlingIou || !resolvedSettleAccountId || !settleAmountValid) return;
+    const isFull = parsedSettleAmount >= settlingIou.amount - 0.001;
+    settleIou(
+      settlingIou.id,
+      resolvedSettleAccountId,
+      isFull ? undefined : parsedSettleAmount,
+    );
     setSettlingIouId(null);
   };
 
   const openSettle = (iou: Iou) => {
     setSettlingIouId(iou.id);
     setSettleAccountId(iou.accountId);
+    setSettleAmountInput(String(iou.amount));
   };
 
   const { totalLent, totalBorrowed, net, pendingCount, people } =
@@ -264,9 +326,11 @@ export function IousPanel() {
       for (const i of ious) {
         if (i.status !== "pending") continue;
         count += 1;
-        const signed = i.type === "lent" ? i.amount : -i.amount;
-        if (i.type === "lent") lent += i.amount;
-        else borrowed += i.amount;
+        const acc = accounts.find((a) => a.id === i.accountId);
+        const baseAmt = amountInBase(i.amount, acc, exchangeRates);
+        const signed = i.type === "lent" ? baseAmt : -baseAmt;
+        if (i.type === "lent") lent += baseAmt;
+        else borrowed += baseAmt;
 
         const key = personKey(i.personName);
         const entry = byPerson.get(key) ?? {
@@ -287,7 +351,7 @@ export function IousPanel() {
           (a, b) => Math.abs(b.net) - Math.abs(a.net),
         ),
       };
-    }, [ious]);
+    }, [ious, accounts, exchangeRates]);
 
   const activePersonFilter =
     personFilter && people.some((p) => p.key === personFilter)
@@ -412,9 +476,9 @@ export function IousPanel() {
 
           <Button
             size="sm"
-            onClick={() => setShowAddModal(true)}
+            onClick={openAdd}
             icon={<Plus size={15} />}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30 flex-shrink-0 min-h-[36px] focus:ring-indigo-400/50"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30 flex-shrink-0 min-h-[38px] focus:ring-indigo-400/50"
           >
             Add IOU
           </Button>
@@ -524,7 +588,7 @@ export function IousPanel() {
               </p>
               <Button
                 size="sm"
-                onClick={() => setShowAddModal(true)}
+                onClick={openAdd}
                 icon={<Plus size={14} />}
                 className="bg-indigo-600 hover:bg-indigo-500 text-white mx-auto"
               >
@@ -561,11 +625,25 @@ export function IousPanel() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-3">
           {filteredIous.map((iou) => {
             const account = accounts.find((a) => a.id === iou.accountId);
+            const cur = getAccountBalanceCurrency(account);
             const isSettled = iou.status === "settled";
             const isLent = iou.type === "lent";
             const due = getDueBadge(iou);
             const initial =
               iou.personName.trim().charAt(0).toUpperCase() || "?";
+            const hasPartial =
+              !isSettled &&
+              iou.originalAmount !== undefined &&
+              iou.originalAmount > iou.amount;
+            const settledPct = hasPartial && iou.originalAmount
+              ? Math.min(
+                  100,
+                  Math.round(
+                    ((iou.originalAmount - iou.amount) / iou.originalAmount) *
+                      100,
+                  ),
+                )
+              : 0;
 
             return (
               <article
@@ -622,17 +700,38 @@ export function IousPanel() {
                     </p>
                   </div>
 
-                  <p
-                    className={cn(
-                      "text-sm sm:text-[15px] font-bold font-mono tabular-nums text-right flex-shrink-0",
-                      isLent ? "text-emerald-400" : "text-rose-400",
-                      blur,
+                  <div className="text-right flex-shrink-0">
+                    <p
+                      className={cn(
+                        "text-sm sm:text-[15px] font-bold font-mono tabular-nums",
+                        isLent ? "text-emerald-400" : "text-rose-400",
+                        blur,
+                      )}
+                    >
+                      {isLent ? "+" : "-"}
+                      <MoneyValue value={iou.amount} currency={cur} />
+                    </p>
+                    {hasPartial && iou.originalAmount && (
+                      <p className={cn("text-[10px] font-mono text-white/40", blur)}>
+                        of {formatCurrency(iou.originalAmount, cur)}
+                      </p>
                     )}
-                  >
-                    {isLent ? "+" : "-"}
-                    <MoneyValue value={iou.amount} />
-                  </p>
+                  </div>
                 </div>
+
+                {hasPartial && (
+                  <div className="space-y-1">
+                    <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-400 transition-all"
+                        style={{ width: `${settledPct}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-emerald-300/80 font-mono">
+                      {settledPct}% partially settled
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
                   <div className="flex items-center gap-1.5 min-w-0 text-[11px] text-white/40">
@@ -671,18 +770,32 @@ export function IousPanel() {
 
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {!isSettled && (
-                      <button
-                        type="button"
-                        onClick={() => openSettle(iou)}
-                        aria-label={`Settle IOU with ${iou.personName}`}
-                        className={cn(
-                          "px-2.5 min-h-[34px] rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-all",
-                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60",
-                        )}
-                      >
-                        <CheckCircle2 size={13} aria-hidden="true" />
-                        <span>Settle</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openSettle(iou)}
+                          aria-label={`Settle IOU with ${iou.personName}`}
+                          className={cn(
+                            "px-2.5 min-h-[36px] rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-all",
+                            "focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60",
+                          )}
+                        >
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                          <span>Settle</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(iou)}
+                          aria-label={`Edit IOU with ${iou.personName}`}
+                          title="Edit IOU"
+                          className={cn(
+                            "w-9 h-9 flex items-center justify-center rounded-lg text-white/45 hover:bg-white/10 hover:text-white transition-colors",
+                            FOCUS_RING,
+                          )}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -690,7 +803,7 @@ export function IousPanel() {
                       aria-label={`Delete IOU with ${iou.personName}`}
                       title="Delete record"
                       className={cn(
-                        "w-[34px] h-[34px] flex items-center justify-center rounded-lg text-white/40 hover:bg-rose-500/15 hover:text-rose-400 active:bg-rose-500/25 transition-colors",
+                        "w-9 h-9 flex items-center justify-center rounded-lg text-white/40 hover:bg-rose-500/15 hover:text-rose-400 active:bg-rose-500/25 transition-colors",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60",
                       )}
                     >
@@ -706,14 +819,20 @@ export function IousPanel() {
 
       <Modal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title="Record IOU / سلفة أو دين"
+        onClose={() => {
+          setShowAddModal(false);
+          setEditingIou(null);
+        }}
+        title={editingIou ? `Edit IOU · ${editingIou.personName}` : "Record IOU / سلفة أو دين"}
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setShowAddModal(false);
+                setEditingIou(null);
+              }}
             >
               Cancel
             </Button>
@@ -723,12 +842,12 @@ export function IousPanel() {
               disabled={accounts.length === 0}
               className="bg-indigo-600 hover:bg-indigo-500 text-white"
             >
-              Save Record
+              {editingIou ? "Save Changes" : "Save Record"}
             </Button>
           </div>
         }
       >
-        <form id="iou-form" onSubmit={handleAddIou} className="space-y-4">
+        <form id="iou-form" onSubmit={handleSaveIou} className="space-y-4">
           <div
             role="group"
             aria-label="IOU type"
@@ -782,7 +901,11 @@ export function IousPanel() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="iou-amount" className="label-base">
-                Amount (EGP)
+                Amount (
+                {getAccountBalanceCurrency(
+                  accounts.find((a) => a.id === formAccountId),
+                )}
+                )
               </label>
               <input
                 id="iou-amount"
@@ -829,7 +952,7 @@ export function IousPanel() {
               >
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id} className="bg-[#111827]">
-                    {acc.name} ({acc.currency})
+                    {acc.name} ({getAccountBalanceCurrency(acc)})
                   </option>
                 ))}
               </select>
@@ -850,19 +973,21 @@ export function IousPanel() {
             />
           </div>
 
-          <label className="flex items-start gap-2 cursor-pointer pt-1">
-            <input
-              type="checkbox"
-              checked={deductFromAccount}
-              onChange={(e) => setDeductFromAccount(e.target.checked)}
-              className="mt-0.5 rounded border-white/20 bg-white/10 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span className="text-xs text-white/70">
-              {type === "lent"
-                ? "Deduct money from account now (keeps account balance accurate)"
-                : "Add borrowed cash to account balance now"}
-            </span>
-          </label>
+          {!editingIou && (
+            <label className="flex items-start gap-2 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={deductFromAccount}
+                onChange={(e) => setDeductFromAccount(e.target.checked)}
+                className="mt-0.5 rounded border-white/20 bg-white/10 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-xs text-white/70">
+                {type === "lent"
+                  ? "Deduct money from account now (keeps account balance accurate)"
+                  : "Add borrowed cash to account balance now"}
+              </span>
+            </label>
+          )}
         </form>
       </Modal>
 
@@ -878,72 +1003,125 @@ export function IousPanel() {
             </Button>
             <Button
               onClick={handleSettleSubmit}
-              disabled={!resolvedSettleAccountId}
+              disabled={!resolvedSettleAccountId || !settleAmountValid}
               className="bg-emerald-600 hover:bg-emerald-500 text-white"
             >
-              Confirm Settlement
+              {settlingIou &&
+              settleAmountValid &&
+              parsedSettleAmount < settlingIou.amount - 0.001
+                ? "Record Partial Payment"
+                : "Confirm Full Settlement"}
             </Button>
           </div>
         }
       >
-        {settlingIou && (
-          <div className="space-y-4">
-            <div
-              className={cn(
-                "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5",
-                settlingIou.type === "lent"
-                  ? "bg-emerald-500/10 border-emerald-500/25"
-                  : "bg-rose-500/10 border-rose-500/25",
-              )}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">
-                  {settlingIou.personName}
-                </p>
-                <p className="text-xs text-white/50">
-                  {settlingIou.type === "lent"
-                    ? "Pays you back"
-                    : "You pay back"}
-                </p>
-              </div>
-              <span
+        {settlingIou && (() => {
+          const settleCur = getAccountBalanceCurrency(
+            accounts.find((a) => a.id === settlingIou.accountId),
+          );
+          const remainingAfter = settleAmountValid
+            ? Math.max(0, roundMoney(settlingIou.amount - parsedSettleAmount))
+            : settlingIou.amount;
+          return (
+            <div className="space-y-4">
+              <div
                 className={cn(
-                  "font-mono font-bold tabular-nums text-sm flex-shrink-0",
+                  "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5",
                   settlingIou.type === "lent"
-                    ? "text-emerald-400"
-                    : "text-rose-400",
-                  blur,
+                    ? "bg-emerald-500/10 border-emerald-500/25"
+                    : "bg-rose-500/10 border-rose-500/25",
                 )}
               >
-                {formatCurrency(settlingIou.amount, "EGP")}
-              </span>
-            </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {settlingIou.personName}
+                  </p>
+                  <p className="text-xs text-white/50">
+                    {settlingIou.type === "lent"
+                      ? "Pays you back"
+                      : "You pay back"}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "font-mono font-bold tabular-nums text-sm flex-shrink-0",
+                    settlingIou.type === "lent"
+                      ? "text-emerald-400"
+                      : "text-rose-400",
+                    blur,
+                  )}
+                >
+                  {formatCurrency(settlingIou.amount, settleCur)}
+                </span>
+              </div>
 
-            <div>
-              <label htmlFor="iou-settle-account" className="label-base">
-                {settlingIou.type === "lent"
-                  ? "Deposit into account"
-                  : "Pay from account"}
-              </label>
-              <select
-                id="iou-settle-account"
-                value={resolvedSettleAccountId}
-                onChange={(e) => setSettleAccountId(e.target.value)}
-                className="input-base"
-              >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id} className="bg-[#111827]">
-                    {acc.name} ({acc.currency})
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-white/40 mt-1.5">
-                A transaction is logged and the account balance updates
-                automatically.
-              </p>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="iou-settle-amount" className="label-base !mb-0">
+                    Amount to Settle ({settleCur})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSettleAmountInput(String(settlingIou.amount))}
+                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300"
+                  >
+                    Full amount
+                  </button>
+                </div>
+                <input
+                  id="iou-settle-amount"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0.01"
+                  max={settlingIou.amount}
+                  value={settleAmountInput}
+                  onChange={(e) => setSettleAmountInput(e.target.value)}
+                  className="input-base font-mono font-bold"
+                />
+                {!settleAmountValid && (
+                  <p className="text-[11px] text-rose-400 mt-1">
+                    Enter an amount between 0.01 and{" "}
+                    {formatCurrency(settlingIou.amount, settleCur)}.
+                  </p>
+                )}
+                {settleAmountValid && remainingAfter > 0 && (
+                  <p className="text-[11px] text-amber-300/90 mt-1">
+                    Partial payment — remaining balance will be{" "}
+                    <strong className={cn("font-mono", blur)}>
+                      {formatCurrency(remainingAfter, settleCur)}
+                    </strong>
+                    .
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="iou-settle-account" className="label-base">
+                  {settlingIou.type === "lent"
+                    ? "Deposit into account"
+                    : "Pay from account"}
+                </label>
+                <select
+                  id="iou-settle-account"
+                  value={resolvedSettleAccountId}
+                  onChange={(e) => setSettleAccountId(e.target.value)}
+                  className="input-base"
+                >
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id} className="bg-[#111827]">
+                      {acc.name} ({getAccountBalanceCurrency(acc)})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-white/40 mt-1.5">
+                  A transaction is logged and the account balance updates
+                  automatically.
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       <Modal

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useStore } from "../../store/useStore";
 import { Card } from "../ui/Card";
-import { formatCurrency, getFinancialCycle, cn } from "../../lib/utils";
+import { formatCurrency, getFinancialCycle, amountInBase, cn } from "../../lib/utils";
 import { CATEGORY_COLORS } from "../../types";
 
 interface CustomTooltipProps {
@@ -60,28 +60,46 @@ function CustomLabel({
 }
 
 export function SpendingDonut() {
-  const { transactions, privacyMode, settings } = useStore();
+  const {
+    transactions,
+    accounts,
+    exchangeRates,
+    customCategories,
+    privacyMode,
+    settings,
+  } = useStore();
 
   const cycle = useMemo(
     () => getFinancialCycle(new Date(), settings.monthStartsOnDay ?? 1),
     [settings.monthStartsOnDay],
   );
 
+  const colorLookup = useMemo(() => {
+    const map: Record<string, string> = { ...CATEGORY_COLORS };
+    for (const c of customCategories ?? []) {
+      map[c.name] = c.color;
+    }
+    return map;
+  }, [customCategories]);
+
   const data = useMemo(() => {
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
     const byCategory = new Map<string, number>();
     for (const tx of transactions) {
-      if (tx.type !== "expense") continue;
+      if (tx.type !== "expense" || tx.isIou || tx.isReconciliation) continue;
       if (!cycle.isDateInCycle(tx.date)) continue;
-      byCategory.set(
-        tx.category,
-        (byCategory.get(tx.category) ?? 0) + tx.amount,
+      const baseAmt = amountInBase(
+        tx.amount,
+        accMap.get(tx.accountId),
+        exchangeRates,
       );
+      byCategory.set(tx.category, (byCategory.get(tx.category) ?? 0) + baseAmt);
     }
     return Array.from(byCategory.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6); // top 6 categories
-  }, [transactions, cycle]);
+  }, [transactions, accounts, exchangeRates, cycle]);
 
   const total = data.reduce((s, d) => s + d.value, 0);
 
@@ -106,7 +124,7 @@ export function SpendingDonut() {
           <h3 className="text-sm font-semibold text-white">Category Breakdown</h3>
           <p
             className={cn(
-              "text-[11px] text-white/40",
+              "text-[11px] text-white/40 tabular-nums",
               privacyMode && "privacy-blur",
             )}
           >
@@ -137,7 +155,7 @@ export function SpendingDonut() {
               {data.map((entry) => (
                 <Cell
                   key={entry.name}
-                  fill={CATEGORY_COLORS[entry.name] ?? "#7c3aed"}
+                  fill={colorLookup[entry.name] ?? "#7c3aed"}
                   stroke="transparent"
                 />
               ))}
@@ -147,14 +165,14 @@ export function SpendingDonut() {
         </ResponsiveContainer>
       </div>
 
-      {/* Custom Compact Legend Grid (max 4-6 items) */}
+      {/* Custom Compact Legend Grid */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-white/[0.04]">
         {data.slice(0, 4).map((entry) => (
           <div key={entry.name} className="flex items-center gap-1.5 min-w-0">
             <span
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{
-                backgroundColor: CATEGORY_COLORS[entry.name] ?? "#7c3aed",
+                backgroundColor: colorLookup[entry.name] ?? "#7c3aed",
               }}
             />
             <span className="text-[10px] text-white/60 truncate">

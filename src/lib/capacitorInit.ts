@@ -3,13 +3,16 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { handleHardwareBack } from "./backButtonManager";
 
+let capacitorInitialized = false;
+
 /**
  * Initializes Capacitor Native mobile hardening:
  * - Dark-mode status bar styling matching #0B0F17 theme
- * - Global Android hardware back-button listener
+ * - Global Android hardware back-button listener (registered once)
  */
 export async function initCapacitorApp(): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
+  if (!Capacitor.isNativePlatform() || capacitorInitialized) return;
+  capacitorInitialized = true;
 
   try {
     // Match the dark theme background and light icons

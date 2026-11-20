@@ -1,8 +1,6 @@
 import { useState, useMemo } from "react";
 import {
   Wallet,
-  Eye,
-  EyeOff,
   Sparkles,
   TrendingUp,
   TrendingDown,
@@ -18,6 +16,8 @@ import {
   Sun,
   Moon,
   Sunrise,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { useDashboardInsights } from "../../hooks/useDashboardInsights";
@@ -26,7 +26,9 @@ import { BalanceTrendChart } from "../charts/BalanceTrendChart";
 import { SpendingDonut } from "../charts/SpendingDonut";
 import { RecentTransactions } from "./RecentTransactions";
 import { UpcomingBillsWidget } from "./UpcomingBillsWidget";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { formatCurrency, getFinancialCycle, amountInBase, cn } from "../../lib/utils";
+import { useT } from "../../lib/i18n";
 import type { Page } from "../layout/Sidebar";
 
 interface Props {
@@ -137,11 +139,15 @@ export function DashboardBentoView({ onNavigate }: Props) {
     accounts,
     exchangeRates,
     privacyMode,
-    togglePrivacyMode,
+    isDemoData,
+    dismissDemoMode,
+    startFresh,
     settings,
     monthlyBudgetTarget,
     setMonthlyBudgetTarget,
   } = useStore();
+  const { t } = useT();
+  const [confirmStartFresh, setConfirmStartFresh] = useState(false);
 
   const { insights, stats } = useDashboardInsights();
   const breakdown = getNetWorthBreakdown();
@@ -162,19 +168,27 @@ export function DashboardBentoView({ onNavigate }: Props) {
   const savingsRate = stats.savingsRate;
   const isSavingsPositive = mtdIncome >= mtdExpenses;
 
-  // 14-day spending sparkline (converted to base currency)
+  // 14-day spending sparkline (converted to base currency, excluding IOUs & reconciliations)
   const sparklineData = useMemo(() => {
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
     const bars: number[] = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const total = transactions
-        .filter((tx) => tx.type === "expense" && tx.date === ds && !tx.isIou)
-        .reduce((s, tx) => {
-          const acc = accounts.find((a) => a.id === tx.accountId);
-          return s + amountInBase(tx.amount, acc, exchangeRates);
-        }, 0);
+        .filter(
+          (tx) =>
+            tx.type === "expense" &&
+            tx.date === ds &&
+            !tx.isIou &&
+            !tx.isReconciliation,
+        )
+        .reduce(
+          (s, tx) =>
+            s + amountInBase(tx.amount, accMap.get(tx.accountId), exchangeRates),
+          0,
+        );
       bars.push(total);
     }
     return bars;
@@ -202,7 +216,44 @@ export function DashboardBentoView({ onNavigate }: Props) {
   const nwDeltaPositive = nwDelta30d >= 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
+      {/* ═══════════════════════════════════════════════════════════
+          DEMO DATA ONBOARDING BANNER
+          ═══════════════════════════════════════════════════════════ */}
+      {isDemoData && (
+        <div className="rounded-2xl bg-gradient-to-r from-blue-500/12 via-indigo-500/10 to-sky-500/10 border border-blue-500/25 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center flex-shrink-0">
+              <Sparkles size={15} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white">{t("demo.title")}</p>
+              <p className="text-[11px] text-white/55 leading-snug">
+                {t("demo.desc")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setConfirmStartFresh(true)}
+              className="min-h-[36px] px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+            >
+              <RotateCcw size={13} />
+              <span>{t("demo.startFresh")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={dismissDemoMode}
+              aria-label={t("demo.dismiss")}
+              className="min-h-[36px] min-w-[36px] rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/60 hover:text-white flex items-center justify-center transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════
           GREETING ROW
           ═══════════════════════════════════════════════════════════ */}
@@ -214,17 +265,10 @@ export function DashboardBentoView({ onNavigate }: Props) {
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono text-white/60">
-            <Calendar size={11} className="inline mr-1 text-blue-400" />
+          <div className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono text-white/65 whitespace-nowrap">
+            <Calendar size={11} className="inline me-1 text-blue-400" />
             {cycle.cycleLabel}
           </div>
-          <button
-            onClick={togglePrivacyMode}
-            className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white border border-white/[0.08] transition-colors"
-            title={privacyMode ? "Show Balances" : "Hide Balances"}
-          >
-            {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
-          </button>
         </div>
       </div>
 
@@ -234,7 +278,7 @@ export function DashboardBentoView({ onNavigate }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
         {/* ─── Card 1: Net Worth Hero ─── */}
-        <div className="lg:col-span-5 rounded-2xl bg-gradient-to-br from-[#12192B]/95 via-[#0D121F]/95 to-[#0A0E17]/95 border border-blue-500/25 p-5 shadow-xl relative overflow-hidden flex flex-col justify-between group">
+        <div className="lg:col-span-5 rounded-2xl bg-gradient-to-br from-[#12192B]/95 via-[#0D121F]/95 to-[#0A0E17]/95 border border-blue-500/25 p-4 sm:p-5 shadow-xl relative overflow-hidden flex flex-col justify-between group">
           <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
 
           {/* Header */}
@@ -248,10 +292,10 @@ export function DashboardBentoView({ onNavigate }: Props) {
           </div>
 
           {/* Big Number */}
-          <div className="my-3 relative z-10">
+          <div className="my-3 relative z-10 min-w-0">
             <p
               className={cn(
-                "text-3xl sm:text-[38px] font-black font-mono tracking-tight tabular-nums text-white drop-shadow-md leading-none",
+                "text-2xl xs:text-3xl sm:text-[36px] font-black font-mono tracking-tight tabular-nums text-white drop-shadow-md leading-tight truncate",
                 privacyMode && "privacy-blur",
               )}
             >
@@ -524,9 +568,22 @@ export function DashboardBentoView({ onNavigate }: Props) {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════
-          UPCOMING BILLS
+          UPCOMING BILLS & INSTALLMENTS
           ═══════════════════════════════════════════════════════════ */}
       <UpcomingBillsWidget onViewAll={() => onNavigate("commitments")} />
+
+      <ConfirmDialog
+        isOpen={confirmStartFresh}
+        onClose={() => setConfirmStartFresh(false)}
+        onConfirm={() => {
+          startFresh();
+          onNavigate("accounts");
+        }}
+        title="Clear Sample Data & Start Fresh?"
+        message="This removes all sample accounts, transactions, bills, and IOUs so you can start tracking your real finances from scratch."
+        confirmLabel="Start Fresh"
+        variant="primary"
+      />
     </div>
   );
 }

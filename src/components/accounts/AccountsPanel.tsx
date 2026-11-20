@@ -14,15 +14,17 @@ import {
   Banknote,
   PiggyBank,
   TrendingUp,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
+import { useToastStore } from "../../store/useToastStore";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Input, Select } from "../ui/FormFields";
-import { formatCurrency, cn } from "../../lib/utils";
+import { accountBalanceInBase, formatCurrency, cn } from "../../lib/utils";
 import type {
   Account,
   AccountType,
@@ -202,7 +204,7 @@ const RATE_FIELDS = [
 const PRIMARY_BTN = "bg-blue-600 hover:bg-blue-500 text-white";
 
 const iconBtn =
-  "p-2 sm:p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors";
+  "p-2.5 sm:p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors";
 
 /** Non-standard assets (gold / FX) store `balance` as the EGP-converted value. */
 function getDisplayCurrency(account: Account) {
@@ -254,9 +256,11 @@ export function AccountsPanel() {
     getNetWorthBreakdown,
     getAccount30DayNetFlow,
     exchangeRates,
+    ratesUpdatedAt,
     updateExchangeRates,
     privacyMode,
   } = useStore();
+  const addToast = useToastStore((s) => s.addToast);
 
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -274,6 +278,7 @@ export function AccountsPanel() {
   // Live rates edit modal
   const [showRatesModal, setShowRatesModal] = useState(false);
   const [tempRates, setTempRates] = useState(exchangeRates);
+  const [fetchingRates, setFetchingRates] = useState(false);
 
   const breakdown = getNetWorthBreakdown();
   const totalAssets = breakdown.liquidCash + breakdown.hardAssets;
@@ -399,6 +404,42 @@ export function AccountsPanel() {
     e.preventDefault();
     updateExchangeRates(tempRates);
     setShowRatesModal(false);
+  };
+
+  const handleFetchLiveRates = async () => {
+    setFetchingRates(true);
+    try {
+      const res = await fetch("https://open.er-api.com/v6/latest/USD");
+      if (!res.ok) throw new Error("Network error");
+      const data = (await res.json()) as {
+        result?: string;
+        rates?: Record<string, number>;
+      };
+      const egpPerUsd = data.rates?.EGP;
+      const eurPerUsd = data.rates?.EUR;
+      const sarPerUsd = data.rates?.SAR;
+      if (!egpPerUsd || !eurPerUsd || !sarPerUsd) {
+        throw new Error("Incomplete FX payload");
+      }
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      setTempRates((prev) => ({
+        ...prev,
+        USD: round2(egpPerUsd),
+        EUR: round2(egpPerUsd / eurPerUsd),
+        SAR: round2(egpPerUsd / sarPerUsd),
+      }));
+      addToast({
+        type: "success",
+        message: "Live USD, EUR & SAR rates fetched! Click Update Rates to apply.",
+      });
+    } catch {
+      addToast({
+        type: "warning",
+        message: "Couldn't fetch live FX rates right now. You can enter rates manually.",
+      });
+    } finally {
+      setFetchingRates(false);
+    }
   };
 
   const actualParsed = parseFloat(actualBalanceInput);
@@ -566,11 +607,12 @@ export function AccountsPanel() {
             const theme = CARD_THEMES[themeKey] || CARD_THEMES.royal_blue;
             const netFlow = getAccount30DayNetFlow(account.id);
             const displayCurrency = getDisplayCurrency(account);
+            const balanceInBase = accountBalanceInBase(account, exchangeRates);
             const share =
               totalAssets > 0
                 ? Math.min(
                     100,
-                    (Math.max(0, account.balance) / totalAssets) * 100,
+                    (Math.max(0, balanceInBase) / totalAssets) * 100,
                   )
                 : 0;
 
@@ -749,7 +791,12 @@ export function AccountsPanel() {
 
             <div className="bg-white/[0.03] px-3 py-2 rounded-xl border border-white/[0.06] flex items-center justify-between gap-2 text-xs font-mono">
               <span className="text-white/60">Recorded Balance</span>
-              <span className="font-bold text-white truncate">
+              <span
+                className={cn(
+                  "font-bold text-white truncate",
+                  privacyMode && "privacy-blur",
+                )}
+              >
                 {reconcileAccount.balance < 0 ? "-" : ""}
                 {formatCurrency(reconcileAccount.balance, reconcileCurrency)}
               </span>
@@ -996,10 +1043,34 @@ export function AccountsPanel() {
           title="Update FX & Gold Rates"
         >
           <form onSubmit={handleSaveRates} className="space-y-3">
-            <p className="text-xs text-white/60">
-              Set conversion rates to Egyptian Pound (EGP). Foreign currency and
-              gold accounts are revalued immediately.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <div className="min-w-0">
+                <p className="text-xs text-white/80 font-medium">
+                  Set conversion rates to Egyptian Pound (EGP)
+                </p>
+                <p className="text-[11px] text-white/45 mt-0.5">
+                  {ratesUpdatedAt
+                    ? `Last updated: ${new Date(ratesUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                    : "FX & gold accounts revalue immediately."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={fetchingRates}
+                onClick={handleFetchLiveRates}
+                icon={
+                  <RefreshCw
+                    size={13}
+                    className={cn(fetchingRates && "animate-spin")}
+                  />
+                }
+                className="border-blue-400/30 text-blue-300 hover:bg-blue-500/15 flex-shrink-0"
+              >
+                {fetchingRates ? "Fetching..." : "Fetch Live FX"}
+              </Button>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {RATE_FIELDS.map(({ key, label, step }) => (

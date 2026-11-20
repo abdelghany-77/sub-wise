@@ -30,7 +30,12 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { CATEGORY_COLORS, type Transaction, type TransactionType } from "../../types";
+import {
+  CATEGORY_COLORS,
+  type CustomCategory,
+  type Transaction,
+  type TransactionType,
+} from "../../types";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   "Food & Dining": Utensils,
@@ -74,8 +79,13 @@ export function getCategoryIcon(category: string, type: TransactionType): Lucide
   return type === "income" ? Wallet : CircleDollarSign;
 }
 
-export function getCategoryColor(tx: Pick<Transaction, "category" | "type">): string {
+export function getCategoryColor(
+  tx: Pick<Transaction, "category" | "type">,
+  customCategories?: CustomCategory[],
+): string {
   if (tx.type === "transfer") return CATEGORY_COLORS.Transfer;
+  const custom = customCategories?.find((c) => c.name === tx.category);
+  if (custom) return custom.color;
   return CATEGORY_COLORS[tx.category] ?? "#94a3b8";
 }
 
